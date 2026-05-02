@@ -28,9 +28,18 @@ export async function loader({ request }: Route.LoaderArgs) {
 
   return { 
     user: await userPromise, 
-    accounts: ensureUserAccounts(userId), 
-    notifications: listNotifications(userId), 
-    categories: db.select().from(categoriesTable).where(eq(categoriesTable.userId, userId)).orderBy(desc(categoriesTable.createdAt))
+    accounts: ensureUserAccounts(userId).catch(e => {
+      console.error("Layout Accounts Error:", e);
+      return [];
+    }),
+    notifications: listNotifications(userId).catch(e => {
+      console.error("Layout Notifications Error:", e);
+      return [];
+    }),
+    categories: db.select().from(categoriesTable).where(eq(categoriesTable.userId, userId)).orderBy(desc(categoriesTable.createdAt)).catch(e => {
+      console.error("Layout Categories Error:", e);
+      return [];
+    }),
   };
 }
 
