@@ -27,9 +27,10 @@ export function BottomSheet({
   const [dragY, setDragY] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
 
-  const sheetRef = useRef<HTMLDivElement>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
-  // Drag tracking in a ref to avoid stale closures inside event handlers
+  // Only the drag-handle area (pill + header) initiates swipe-to-dismiss.
+  // Attaching to the whole sheet caused scroll gestures starting at
+  // scrollTop=0 to be intercepted as a dismiss drag instead.
+  const dragHandleRef = useRef<HTMLDivElement>(null);
   const dragState = useRef<{ startY: number; startTime: number; active: boolean }>({
     startY: 0,
     startTime: 0,
@@ -55,15 +56,13 @@ export function BottomSheet({
     return () => { document.body.style.overflow = ""; };
   }, [open]);
 
-  // Swipe-to-dismiss — only on position="bottom" sheets on touch devices
+  // Swipe-to-dismiss — drag handle zone only, position="bottom" only
   useEffect(() => {
     if (!open || position !== "bottom") return;
-    const sheet = sheetRef.current;
-    if (!sheet) return;
+    const handle = dragHandleRef.current;
+    if (!handle) return;
 
     const onTouchStart = (e: TouchEvent) => {
-      // Don't start a sheet drag if the content area is scrolled down
-      if (scrollRef.current && scrollRef.current.scrollTop > 2) return;
       dragState.current = {
         startY: e.touches[0].clientY,
         startTime: Date.now(),
@@ -73,17 +72,9 @@ export function BottomSheet({
 
     const onTouchMove = (e: TouchEvent) => {
       if (!dragState.current.active) return;
-      // Cancel drag if user scrolled the content area
-      if (scrollRef.current && scrollRef.current.scrollTop > 2) {
-        dragState.current.active = false;
-        currentDragY.current = 0;
-        setDragY(0);
-        setIsDragging(false);
-        return;
-      }
       const delta = e.touches[0].clientY - dragState.current.startY;
-      if (delta <= 0) return; // Only allow downward drag
-      e.preventDefault(); // Prevent browser pull-to-refresh / scroll
+      if (delta <= 0) return;
+      e.preventDefault();
       currentDragY.current = delta;
       setDragY(delta);
       setIsDragging(true);
@@ -95,28 +86,26 @@ export function BottomSheet({
       setIsDragging(false);
 
       const dist = currentDragY.current;
-      const elapsed = Date.now() - dragState.current.startTime;
-      const velocity = dist / elapsed; // px/ms
+      const elapsed = Math.max(1, Date.now() - dragState.current.startTime);
+      const velocity = dist / elapsed;
 
-      // Dismiss if dragged far enough OR flicked fast enough
-      if (dist > 80 || velocity > 0.5) {
+      if (dist > 80 || (dist > 20 && velocity > 0.5)) {
         onClose();
       }
       currentDragY.current = 0;
       setDragY(0);
     };
 
-    // passive: false on touchmove so we can call preventDefault()
-    sheet.addEventListener("touchstart", onTouchStart, { passive: true });
-    sheet.addEventListener("touchmove", onTouchMove, { passive: false });
-    sheet.addEventListener("touchend", onTouchEnd, { passive: true });
-    sheet.addEventListener("touchcancel", onTouchEnd, { passive: true });
+    handle.addEventListener("touchstart", onTouchStart, { passive: true });
+    handle.addEventListener("touchmove", onTouchMove, { passive: false });
+    handle.addEventListener("touchend", onTouchEnd, { passive: true });
+    handle.addEventListener("touchcancel", onTouchEnd, { passive: true });
 
     return () => {
-      sheet.removeEventListener("touchstart", onTouchStart);
-      sheet.removeEventListener("touchmove", onTouchMove);
-      sheet.removeEventListener("touchend", onTouchEnd);
-      sheet.removeEventListener("touchcancel", onTouchEnd);
+      handle.removeEventListener("touchstart", onTouchStart);
+      handle.removeEventListener("touchmove", onTouchMove);
+      handle.removeEventListener("touchend", onTouchEnd);
+      handle.removeEventListener("touchcancel", onTouchEnd);
     };
   }, [open, position, onClose]);
 
@@ -133,7 +122,6 @@ export function BottomSheet({
 
       {/* Sheet / Modal */}
       <div
-        ref={sheetRef}
         className={`relative w-full max-h-[92vh] overflow-hidden bg-brand-surface-solid text-brand-text border-t sm:border border-brand-hairline shadow-2xl flex flex-col ${
           position === "bottom"
             ? "rounded-t-[24px] sm:rounded-[24px] sm:max-w-[480px] animate-in slide-in-from-bottom-6 duration-300"
@@ -141,33 +129,35 @@ export function BottomSheet({
         }`}
         style={{
           transform: dragY > 0 ? `translateY(${dragY}px)` : undefined,
-          // Instant during drag, spring back when released
           transition: isDragging ? "none" : "transform 0.3s cubic-bezier(0.32, 0.72, 0, 1)",
         }}
       >
-        {/* Drag handle for mobile */}
-        {position === "bottom" && (
-          <div className="w-10 h-1.5 rounded-full mx-auto mt-3 mb-1 bg-brand-text/10 sm:hidden" />
-        )}
+        {/* Drag handle zone — pill + header, touch-initiated dismiss only from here */}
+        <div ref={dragHandleRef} className="touch-none select-none">
+          {position === "bottom" && (
+            <div className="flex justify-center pt-3 pb-1 sm:hidden">
+              <div className="w-10 h-1.5 rounded-full bg-brand-text/10" />
+            </div>
+          )}
 
-        {/* Header */}
-        {title && (
-          <div className="flex items-center justify-between px-6 py-4 border-b border-brand-hairline/50">
-            <h3 className="text-base font-bold text-brand-text tracking-tight m-0">
-              {title}
-            </h3>
-            <button
-              type="button"
-              onClick={onClose}
-              className="w-8 h-8 rounded-full bg-brand-surface-2 text-brand-text-dim hover:text-brand-text transition-colors grid place-items-center"
-            >
-              <CloseIcon size={14} />
-            </button>
-          </div>
-        )}
+          {title && (
+            <div className="flex items-center justify-between px-6 py-4 border-b border-brand-hairline/50">
+              <h3 className="text-base font-bold text-brand-text tracking-tight m-0">
+                {title}
+              </h3>
+              <button
+                type="button"
+                onClick={onClose}
+                className="w-8 h-8 rounded-full bg-brand-surface-2 text-brand-text-dim hover:text-brand-text transition-colors grid place-items-center"
+              >
+                <CloseIcon size={14} />
+              </button>
+            </div>
+          )}
+        </div>
 
         {/* Scrollable Content */}
-        <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 scrollbar-none">
+        <div className="flex-1 overflow-y-auto p-6 scrollbar-none">
           <PortalContainerContext.Provider value={portalNode}>
             {children}
           </PortalContainerContext.Provider>

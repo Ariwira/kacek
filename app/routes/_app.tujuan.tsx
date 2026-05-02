@@ -24,10 +24,10 @@ import { useToast } from "~/components/toast";
 export async function loader({ request }: Route.LoaderArgs) {
   const userId = await requireUserId(request);
   const [goals, stats] = await Promise.all([
-    listGoals(userId),
-    getUserStats(userId),
+    listGoals(userId).catch(e => { console.error("Goals query error:", e); return []; }),
+    getUserStats(userId).catch(e => { console.error("User stats error:", e); return { name: null, email: "" }; }),
   ]);
-  const userInitials = (stats.name || stats.email).substring(0, 2).toUpperCase();
+  const userInitials = ((stats.name || stats.email) ?? "").substring(0, 2).toUpperCase();
   return { goals, userInitials };
 }
 
