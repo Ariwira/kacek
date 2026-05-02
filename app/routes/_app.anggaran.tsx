@@ -206,25 +206,6 @@ export default function AnggaranPage() {
   );
 }
 
-      <BottomSheet
-        open={!!editing}
-        onClose={() => setEditing(null)}
-        title={`${STR.budgetEdit} · ${editing ? (editing.name || STR.cat[editing.category]) : ""}`}
-      >
-        {editing && (
-          <BudgetEditForm
-            dark={dark}
-            month={month}
-            category={editing.category}
-            initial={editing.budget}
-            onDone={() => setEditing(null)}
-          />
-        )}
-      </BottomSheet>
-    </div>
-  );
-}
-
 function progressColor(pct: number) {
   if (pct >= 90) return "var(--red)";
   if (pct >= 70) return "var(--violet)";
