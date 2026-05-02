@@ -1,4 +1,4 @@
-import { useFetcher, useLoaderData, useNavigation, useRouteLoaderData, Await } from "react-router";
+import { useFetcher, useLoaderData, useNavigation, useRouteLoaderData, Await, defer } from "react-router";
 import { useState, useEffect, useRef, Suspense } from "react";
 import type { Route } from "./+types/_app.dashboard";
 import { Header } from "~/components/dashboard/header";
@@ -18,18 +18,18 @@ import { useToast } from "~/components/toast";
 export async function loader({ request }: Route.LoaderArgs) {
   const userId = await requireUserId(request);
 
-  // We await this because it updates the DB state before rendering
+  // Process any due recurring transactions first
   await processRecurringTransactions(userId);
 
   const url = new URL(request.url);
   const range = (url.searchParams.get("range") as "week" | "month" | "year") || "month";
 
-  // We defer the data fetching so the shell renders immediately
-  return {
+  // Use defer() to enable streaming
+  return defer({
     range,
     data: getDashboardData(userId, range),
     stats: getUserStats(userId),
-  };
+  });
 }
 
 export default function Dashboard() {
