@@ -12,7 +12,8 @@
       "Bash(cp -r /tmp/design_extract/tesss/* \"d:/Project/portofolio/kacek/_design_ref/\")",
       "Bash(cp -r /tmp/scaffold/. \"d:/Project/portofolio/kacek/\")",
       "Bash(mv /tmp/_design_ref_backup \"d:/Project/portofolio/kacek/_design_ref\")",
-      "Bash(npm install *)"
+      "Bash(npm install *)",
+      "Bash(npm run *)"
     ]
   }
 }

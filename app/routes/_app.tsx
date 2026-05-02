@@ -31,14 +31,18 @@ export async function loader({ request }: Route.LoaderArgs) {
         return null;
       });
 
-    return { 
-      user, 
+    // Notifications are accessed synchronously by Header (unread badge), so await
+    // them eagerly. Calling .filter() on a deferred Promise crashes SSR with a 500.
+    const notifications = await listNotifications(userId).catch(e => {
+      console.error("Layout Notifications Error:", e);
+      return [];
+    });
+
+    return {
+      user,
+      notifications,
       accounts: ensureUserAccounts(userId).catch(e => {
         console.error("Layout Accounts Error:", e);
-        return [];
-      }),
-      notifications: listNotifications(userId).catch(e => {
-        console.error("Layout Notifications Error:", e);
         return [];
       }),
       categories: db.select().from(categoriesTable).where(eq(categoriesTable.userId, userId)).orderBy(desc(categoriesTable.createdAt)).catch(e => {
