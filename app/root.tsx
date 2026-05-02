@@ -6,6 +6,7 @@ import {
   Scripts,
   ScrollRestoration,
   useLoaderData,
+  useNavigation,
 } from "react-router";
 
 import type { Route } from "./+types/root";
@@ -13,6 +14,7 @@ import "./app.css";
 import { getTheme } from "~/lib/theme.server";
 import { type Theme } from "~/components/theme";
 import { ToastProvider } from "~/components/toast";
+import { useEffect, useState } from "react";
 
 export const links: Route.LinksFunction = () => [
   { rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -41,6 +43,43 @@ export async function loader({ request }: Route.LoaderArgs) {
   return { theme };
 }
 
+function GlobalLoading() {
+  const navigation = useNavigation();
+  const active = navigation.state !== "idle";
+  const [progress, setProgress] = useState(0);
+
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (active) {
+      setProgress(0);
+      timer = setInterval(() => {
+        setProgress((prev) => {
+          if (prev >= 90) return prev;
+          return prev + 10;
+        });
+      }, 100);
+    } else {
+      setProgress(100);
+      timer = setTimeout(() => setProgress(0), 300);
+    }
+    return () => {
+      clearInterval(timer);
+      clearTimeout(timer);
+    };
+  }, [active]);
+
+  if (!active && progress === 0) return null;
+
+  return (
+    <div className="fixed top-0 left-0 right-0 z-[10000] pointer-events-none">
+      <div 
+        className="h-[3px] bg-gradient-to-r from-brand-accent to-brand-violet transition-all duration-300 ease-out shadow-[0_0_8px_var(--accent)]"
+        style={{ width: `${progress}%` }}
+      />
+    </div>
+  );
+}
+
 export function Layout({ children }: { children: React.ReactNode }) {
   const data = useLoaderData<typeof loader>();
   const theme: Theme = data?.theme ?? "dark";
@@ -48,12 +87,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
     <html lang="id" data-theme={theme}>
       <head>
         <meta charSet="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0" />
         <Meta />
         <Links />
       </head>
-      <body className="bg-brand-bg text-brand-text min-h-screen font-sans antialiased">
+      <body className="bg-brand-bg text-brand-text min-h-screen font-sans antialiased overflow-x-hidden">
         <ToastProvider>
+          <GlobalLoading />
           {children}
           <ScrollRestoration />
           <Scripts />
@@ -64,11 +104,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
-  return (
-    <ToastProvider>
-      <Outlet />
-    </ToastProvider>
-  );
+  return <Outlet />;
 }
 
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
