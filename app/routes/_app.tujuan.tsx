@@ -1,9 +1,9 @@
 import { useFetcher, useLoaderData, useRouteLoaderData } from "react-router";
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { DatePicker } from "~/components/date-picker";
 import type { Route } from "./+types/_app.tujuan";
 import { requireUserId } from "~/lib/auth.server";
-import { listGoals, getUserStats } from "~/lib/queries.server";
+import { listGoals, getUserStats, listAccounts } from "~/lib/queries.server";
 import {
   THEMES,
   NUM,
@@ -14,7 +14,7 @@ import {
 import { Header } from "~/components/dashboard/header";
 import { GlassCard } from "~/components/glass-card";
 import { PlusIcon } from "~/components/icons";
-import { CheckIcon, TargetIcon, TrashIcon, EditIcon } from "~/components/icons-extra";
+import { CheckIcon, TargetIcon, TrashIcon, EditIcon, ChevronDownIcon } from "~/components/icons-extra";
 import { BottomSheet } from "~/components/bottom-sheet";
 import { RingProgress } from "~/components/ring-progress";
 import { STR } from "~/lib/i18n";
@@ -23,12 +23,13 @@ import { useToast } from "~/components/toast";
 
 export async function loader({ request }: Route.LoaderArgs) {
   const userId = await requireUserId(request);
-  const [goals, stats] = await Promise.all([
+  const [goals, stats, accounts] = await Promise.all([
     listGoals(userId).catch(e => { console.error("Goals query error:", e); return []; }),
     getUserStats(userId).catch(e => { console.error("User stats error:", e); return { name: null, email: "" }; }),
+    listAccounts(userId).catch(e => { console.error("Accounts query error:", e); return []; }),
   ]);
   const userInitials = ((stats.name || stats.email) ?? "").substring(0, 2).toUpperCase();
-  return { goals, userInitials };
+  return { goals, userInitials, accounts };
 }
 
 type GoalEdit = {
@@ -40,7 +41,7 @@ type GoalEdit = {
 };
 
 export default function TujuanPage() {
-  const { goals, userInitials } = useLoaderData<typeof loader>();
+  const { goals, userInitials, accounts } = useLoaderData<typeof loader>();
   const root = useRouteLoaderData("root") as { theme: Theme } | undefined;
   const theme: Theme = root?.theme ?? "dark";
   const T = THEMES[theme];
@@ -52,8 +53,10 @@ export default function TujuanPage() {
     id: string;
     name: string;
   } | null>(null);
-  const [isDeleting, setIsDeleting] = useState<{ id: string; name: string } | null>(null);
+  const [isDeleting, setIsDeleting] = useState<{ id: string; name: string; currentAmount: number } | null>(null);
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
+  const [refundAccount, setRefundAccount] = useState<string>("");
+  const [refundOpen, setRefundOpen] = useState(false);
   
   const deleteFetcher = useFetcher();
 
@@ -186,46 +189,77 @@ export default function TujuanPage() {
                   </div>
 
                   <div className="text-[11px] text-brand-text-mute mb-2.5">
-                    {STR.goalRemaining(formatIDR(remaining))}
+                    {g.isCompleted 
+                      ? "Tujuan Selesai" 
+                      : STR.goalRemaining(formatIDR(remaining))}
                   </div>
 
-                  <div className="flex gap-1.5">
-                    <button
-                      type="button"
-                      className="flex-1 px-3 py-2.25 rounded-xl border-none bg-brand-accent-soft text-brand-accent font-bold text-xs cursor-pointer flex items-center justify-center gap-1 min-h-[44px]"
-                      onClick={() =>
-                        setContributing({ id: g.id, name: g.name })
-                      }
-                    >
-                      <PlusIcon size={12} /> {STR.goalContribute}
-                    </button>
-                    <button
-                      type="button"
-                      className="w-9.5 rounded-xl border border-brand-hairline bg-brand-surface-2 text-brand-text-dim cursor-pointer grid place-items-center p-0 min-h-[44px]"
-                      onClick={() =>
-                        setEditing({
-                          id: g.id,
-                          name: g.name,
-                          targetAmount: g.targetAmount,
-                          deadline: g.deadline
-                            ? new Date(g.deadline).toISOString().slice(0, 10)
-                            : "",
-                          emoji: g.emoji ?? "",
-                        })
-                      }
-                      aria-label={STR.goalEdit}
-                    >
-                      <EditIcon size={14} />
-                    </button>
-                    <button
-                      type="button"
-                      className="w-9.5 rounded-xl border border-brand-red/20 bg-brand-red-soft text-brand-red cursor-pointer grid place-items-center p-0 min-h-[44px]"
-                      onClick={() => setIsDeleting({ id: g.id, name: g.name })}
-                      aria-label={STR.goalDelete}
-                    >
-                      <TrashIcon size={14} />
-                    </button>
-                  </div>
+                  {g.isCompleted ? (
+                     <div className="px-3 py-2.5 rounded-xl border border-brand-hairline bg-brand-surface-2 text-brand-text-dim text-center text-[11px] font-bold uppercase tracking-wider">
+                       Selesai
+                     </div>
+                  ) : pct >= 100 ? (
+                     <div className="flex gap-1.5 flex-wrap">
+                        <button
+                          type="button"
+                          className="flex-1 px-3 py-2.25 rounded-xl border-none bg-brand-accent text-[#06180F] font-bold text-xs cursor-pointer flex items-center justify-center gap-1 min-h-[44px]"
+                          onClick={() => {
+                             if(confirm(`Tandai "${g.name}" sebagai selesai dibeli? Uang yang terkumpul sudah digunakan.`)) {
+                                 const formData = new FormData();
+                                 formData.set("intent", "complete");
+                                 deleteFetcher.submit(formData, { method: "post", action: `/action/goal/${g.id}/complete` });
+                             }
+                          }}
+                        >
+                          <CheckIcon size={12} /> Beli / Selesai
+                        </button>
+                        <button
+                          type="button"
+                          className="flex-1 px-3 py-2.25 rounded-xl border border-brand-hairline bg-brand-surface-2 text-brand-text font-bold text-xs cursor-pointer flex items-center justify-center gap-1 min-h-[44px]"
+                          onClick={() => setIsDeleting({ id: g.id, name: g.name, currentAmount: g.currentAmount })}
+                        >
+                          Tarik Dana
+                        </button>
+                     </div>
+                  ) : (
+                    <div className="flex gap-1.5">
+                      <button
+                        type="button"
+                        className="flex-1 px-3 py-2.25 rounded-xl border-none bg-brand-accent-soft text-brand-accent font-bold text-xs cursor-pointer flex items-center justify-center gap-1 min-h-[44px]"
+                        onClick={() =>
+                          setContributing({ id: g.id, name: g.name })
+                        }
+                      >
+                        <PlusIcon size={12} /> {STR.goalContribute}
+                      </button>
+                      <button
+                        type="button"
+                        className="w-9.5 rounded-xl border border-brand-hairline bg-brand-surface-2 text-brand-text-dim cursor-pointer grid place-items-center p-0 min-h-[44px]"
+                        onClick={() =>
+                          setEditing({
+                            id: g.id,
+                            name: g.name,
+                            targetAmount: g.targetAmount,
+                            deadline: g.deadline
+                              ? new Date(g.deadline).toISOString().slice(0, 10)
+                              : "",
+                            emoji: g.emoji ?? "",
+                          })
+                        }
+                        aria-label={STR.goalEdit}
+                      >
+                        <EditIcon size={14} />
+                      </button>
+                      <button
+                        type="button"
+                        className="w-9.5 rounded-xl border border-brand-red/20 bg-brand-red-soft text-brand-red cursor-pointer grid place-items-center p-0 min-h-[44px]"
+                        onClick={() => setIsDeleting({ id: g.id, name: g.name, currentAmount: g.currentAmount })}
+                        aria-label={STR.goalDelete}
+                      >
+                        <TrashIcon size={14} />
+                      </button>
+                    </div>
+                  )}
                 </GlassCard>
               );
             })}
@@ -259,6 +293,7 @@ export default function TujuanPage() {
             dark={dark}
             goalId={contributing.id}
             onDone={() => setContributing(null)}
+            accounts={accounts}
           />
         )}
       </BottomSheet>
@@ -266,41 +301,92 @@ export default function TujuanPage() {
       {/* Custom Goal Delete Confirmation */}
       <BottomSheet
         open={!!isDeleting}
-        onClose={() => setIsDeleting(null)}
+        onClose={() => {
+            setIsDeleting(null);
+            setRefundAccount("");
+        }}
         title="Hapus Tujuan"
       >
         <div className="p-1">
-          <p className="text-sm text-brand-text-dim mb-6 leading-relaxed">
-            Hapus tujuan tabungan <strong>"{isDeleting?.name}"</strong>? Data kontribusi yang sudah masuk tidak akan dikembalikan ke saldo utama.
-          </p>
+          {isDeleting?.currentAmount && isDeleting.currentAmount > 0 ? (
+            <>
+               <p className="text-sm text-brand-text-dim mb-4 leading-relaxed">
+                  Tujuan <strong>"{isDeleting?.name}"</strong> memiliki tabungan sebesar <strong>{formatIDR(isDeleting.currentAmount)}</strong>. Pilih dompet untuk mengembalikan dana ini:
+               </p>
+               <div className="relative mb-6">
+                 <button
+                    type="button"
+                    onClick={() => setRefundOpen(!refundOpen)}
+                    className="w-full flex items-center gap-3 h-12 px-4 rounded-xl bg-brand-input border border-brand-hairline text-left cursor-pointer transition-all focus:border-brand-accent"
+                  >
+                    <span className="w-6 h-6 shrink-0 rounded-full bg-brand-accent-soft text-brand-accent grid place-items-center text-[11px] font-bold uppercase">
+                      {accounts.find(a => a.id === refundAccount)?.name?.charAt(0) || "?"}
+                    </span>
+                    <span className="flex-1 text-sm font-semibold text-brand-text truncate">
+                      {accounts.find(a => a.id === refundAccount)?.name || "Pilih Akun Pengembalian"}
+                    </span>
+                    <ChevronDownIcon size={14} className={`text-brand-text-mute shrink-0 transition-transform ${refundOpen ? 'rotate-180' : ''}`} />
+                  </button>
+                  
+                  {refundOpen && (
+                     <div className="absolute z-50 mt-2 w-full py-1.5 rounded-xl bg-brand-surface-solid border border-brand-hairline shadow-2xl animate-[overlayIn_0.15s_ease-out] max-h-[200px] overflow-y-auto">
+                       {accounts.map(acc => (
+                         <button
+                            key={acc.id}
+                            type="button"
+                            onClick={() => { setRefundAccount(acc.id); setRefundOpen(false); }}
+                            className="w-full px-4 py-2.5 text-left text-sm font-medium text-brand-text hover:bg-brand-surface-2 transition-colors flex justify-between items-center"
+                         >
+                           <span>{acc.name}</span>
+                           {refundAccount === acc.id && <CheckIcon size={14} className="text-brand-accent" />}
+                         </button>
+                       ))}
+                     </div>
+                  )}
+              </div>
+            </>
+          ) : (
+            <p className="text-sm text-brand-text-dim mb-6 leading-relaxed">
+              Hapus tujuan tabungan <strong>"{isDeleting?.name}"</strong>? Tujuan yang dihapus tidak bisa dikembalikan.
+            </p>
+          )}
+          
           <div className="flex gap-3">
             <button
               type="button"
-              onClick={() => setIsDeleting(null)}
+              onClick={() => {
+                  setIsDeleting(null);
+                  setRefundAccount("");
+              }}
               className="flex-1 px-4 py-3 rounded-2xl border border-brand-hairline bg-brand-surface-2 text-brand-text font-bold text-sm cursor-pointer min-h-[48px]"
             >
               Batal
             </button>
             <button
               type="button"
+              disabled={isDeleting?.currentAmount ? isDeleting.currentAmount > 0 && !refundAccount : false}
               onClick={() => {
                 if (isDeleting) {
                   const goalId = isDeleting.id;
                   const goalName = isDeleting.name;
+                  const amount = isDeleting.currentAmount;
+                  const accId = refundAccount;
                   
-                  // 1. Optimistic hide
                   setHiddenIds(prev => new Set(prev).add(goalId));
                   setIsDeleting(null);
+                  setRefundAccount("");
 
-                  // 2. Set delayed action
                   const timer = setTimeout(() => {
-                    deleteFetcher.submit(null, {
+                    const formData = new FormData();
+                    if (amount > 0 && accId) {
+                        formData.set("refundAccountId", accId);
+                    }
+                    deleteFetcher.submit(formData, {
                       method: "post",
                       action: `/action/goal/${goalId}/delete`,
                     });
                   }, 5000);
 
-                  // 3. Show toast with Undo
                   showToast(`Tujuan "${goalName}" dihapus`, {
                     onUndo: () => {
                       clearTimeout(timer);
@@ -313,7 +399,11 @@ export default function TujuanPage() {
                   });
                 }
               }}
-              className="flex-1 px-4 py-3 rounded-2xl border-none bg-brand-red text-white font-bold text-sm cursor-pointer shadow-lg shadow-brand-red/20 min-h-[48px]"
+              className={`flex-1 px-4 py-3 rounded-2xl border-none font-bold text-sm cursor-pointer shadow-lg min-h-[48px] transition-opacity ${
+                  isDeleting?.currentAmount && isDeleting.currentAmount > 0 && !refundAccount
+                    ? "bg-brand-red/50 text-white/70 cursor-not-allowed"
+                    : "bg-brand-red text-white shadow-brand-red/20"
+              }`}
             >
               Ya, Hapus
             </button>
@@ -427,19 +517,71 @@ function ContributeForm({
   dark,
   goalId,
   onDone,
+  accounts,
 }: {
   dark: boolean;
   goalId: string;
   onDone: () => void;
+  accounts: any[];
 }) {
   const fetcher = useFetcher();
   const submitting = fetcher.state !== "idle";
+  const [selectedAccount, setSelectedAccount] = useState<string>(accounts[0]?.id || "");
+  const [accOpen, setAccOpen] = useState(false);
+  const accTriggerRef = useRef<HTMLButtonElement>(null);
+
+  if (accounts.length === 0) {
+    return (
+      <div className="p-4 text-center text-sm text-brand-text-mute">
+        Anda harus membuat dompet (akun) terlebih dahulu sebelum bisa menabung.
+      </div>
+    );
+  }
+
   return (
     <fetcher.Form
       method="post"
       action={`/action/goal/${goalId}/contribute`}
       onSubmit={() => setTimeout(onDone, 0)}
+      className="p-1 pb-4"
     >
+      <div className="text-[10.5px] tracking-wider uppercase text-brand-text-mute font-bold mb-1.5">
+        Ambil dari Dompet
+      </div>
+      <div className="relative mb-4">
+         <button
+            ref={accTriggerRef}
+            type="button"
+            onClick={() => setAccOpen(!accOpen)}
+            className="w-full flex items-center gap-3 h-12 px-4 rounded-xl bg-brand-input border border-brand-hairline text-left cursor-pointer transition-all focus:border-brand-accent"
+          >
+            <span className="w-6 h-6 shrink-0 rounded-full bg-brand-accent-soft text-brand-accent grid place-items-center text-[11px] font-bold uppercase">
+              {accounts.find(a => a.id === selectedAccount)?.name?.charAt(0) || "?"}
+            </span>
+            <span className="flex-1 text-sm font-semibold text-brand-text truncate">
+              {accounts.find(a => a.id === selectedAccount)?.name || "Pilih Akun"}
+            </span>
+            <ChevronDownIcon size={14} className={`text-brand-text-mute shrink-0 transition-transform ${accOpen ? 'rotate-180' : ''}`} />
+          </button>
+          <input type="hidden" name="accountId" value={selectedAccount} />
+          
+          {accOpen && (
+             <div className="absolute z-50 mt-2 w-full py-1.5 rounded-xl bg-brand-surface-solid border border-brand-hairline shadow-2xl animate-[overlayIn_0.15s_ease-out] max-h-[200px] overflow-y-auto">
+               {accounts.map(acc => (
+                 <button
+                    key={acc.id}
+                    type="button"
+                    onClick={() => { setSelectedAccount(acc.id); setAccOpen(false); }}
+                    className="w-full px-4 py-2.5 text-left text-sm font-medium text-brand-text hover:bg-brand-surface-2 transition-colors flex justify-between items-center"
+                 >
+                   <span>{acc.name} <span className="text-brand-text-dim text-[11px] ml-1">({formatIDR(acc.balance)})</span></span>
+                   {selectedAccount === acc.id && <CheckIcon size={14} className="text-brand-accent" />}
+                 </button>
+               ))}
+             </div>
+          )}
+      </div>
+
       <div className="text-[10.5px] tracking-wider uppercase text-brand-text-mute font-bold mb-1.5">
         {STR.goalContributeAmount}
       </div>

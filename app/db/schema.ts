@@ -37,6 +37,7 @@ export const accounts = sqliteTable("accounts", {
   name: text("name").notNull(), // e.g. "Kas", "Bank BCA", "Gopay"
   type: text("type", { enum: ["cash", "bank", "ewallet", "other"] }).notNull().default("cash"),
   balance: integer("balance").notNull().default(0),
+  isArchived: integer("is_archived", { mode: "boolean" }).notNull().default(false),
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
     .$defaultFn(() => new Date()),
@@ -62,6 +63,8 @@ export const transactions = sqliteTable("transactions", {
     .references(() => users.id, { onDelete: "cascade" }),
   accountId: text("account_id")
     .references(() => accounts.id, { onDelete: "set null" }), // Optional for now to support migration
+  goalId: text("goal_id")
+    .references(() => goals.id, { onDelete: "set null" }), // Link transaction to a goal (e.g. contribution/refund)
   amount: integer("amount").notNull(), // rupiah, no decimals
   type: text("type", { enum: ["expense", "income"] }).notNull(),
   category: text("category").notNull(),
@@ -122,6 +125,7 @@ export const goals = sqliteTable("goals", {
   currentAmount: integer("current_amount").notNull().default(0),
   deadline: integer("deadline", { mode: "timestamp" }),
   emoji: text("emoji"),
+  isCompleted: integer("is_completed", { mode: "boolean" }).notNull().default(false),
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
     .$defaultFn(() => new Date()),

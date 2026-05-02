@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, like, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, like, lte, sql } from "drizzle-orm";
 import { db } from "./db.server";
 import {
   budgets as budgetsTable,
@@ -408,7 +408,15 @@ export async function listAccounts(userId: string) {
   return db
     .select()
     .from(accounts)
-    .where(eq(accounts.userId, userId))
+    .where(and(eq(accounts.userId, userId), eq(accounts.isArchived, false)))
+    .orderBy(desc(accounts.createdAt));
+}
+
+export async function listArchivedAccounts(userId: string) {
+  return db
+    .select()
+    .from(accounts)
+    .where(and(eq(accounts.userId, userId), eq(accounts.isArchived, true)))
     .orderBy(desc(accounts.createdAt));
 }
 
@@ -425,9 +433,30 @@ export async function createAccount(userId: string, name: string, type: "cash" |
 }
 
 export async function deleteAccount(userId: string, id: string) {
-  // We should ideally check if there are transactions linked
+  // Check if there are transactions linked
+  const [{ count }] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(transactions)
+    .where(and(eq(transactions.userId, userId), eq(transactions.accountId, id)));
+
+  if (count > 0) {
+    // Has transactions, so archive it instead
+    return db
+      .update(accounts)
+      .set({ isArchived: true })
+      .where(and(eq(accounts.userId, userId), eq(accounts.id, id)));
+  }
+
+  // No transactions, safe to delete permanently
   return db
     .delete(accounts)
+    .where(and(eq(accounts.userId, userId), eq(accounts.id, id)));
+}
+
+export async function reactivateAccount(userId: string, id: string) {
+  return db
+    .update(accounts)
+    .set({ isArchived: false })
     .where(and(eq(accounts.userId, userId), eq(accounts.id, id)));
 }
 
@@ -617,5 +646,9 @@ export async function listGoals(userId: string) {
     .select()
     .from(goalsTable)
     .where(eq(goalsTable.userId, userId))
-    .orderBy(desc(goalsTable.createdAt));
+    .orderBy(
+      asc(goalsTable.isCompleted),
+      asc(goalsTable.deadline),
+      desc(goalsTable.createdAt)
+    );
 }

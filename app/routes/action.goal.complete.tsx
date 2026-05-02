@@ -1,6 +1,6 @@
 import { redirect } from "react-router";
 import { and, eq, sql } from "drizzle-orm";
-import type { Route } from "./+types/action.goal.delete";
+import type { Route } from "./+types/action.goal.complete";
 import { requireUserId } from "~/lib/auth.server";
 import { db } from "~/lib/db.server";
 import { goals, accounts, transactions } from "~/db/schema";
@@ -10,6 +10,7 @@ export async function action({ request, params }: Route.ActionArgs) {
   const userId = await requireUserId(request);
   const id = params.id!;
   const form = await request.formData();
+  const intent = form.get("intent"); // "complete" or "withdraw"
   const refundAccountId = form.get("refundAccountId") as string | null;
 
   const [goal] = await db.select().from(goals).where(and(eq(goals.id, id), eq(goals.userId, userId)));
@@ -17,8 +18,13 @@ export async function action({ request, params }: Route.ActionArgs) {
   if (!goal) return redirect("/tujuan");
 
   await db.transaction(async (tx) => {
-    // If there is money to refund and an account was provided
-    if (goal.currentAmount > 0 && refundAccountId) {
+    if (intent === "complete") {
+        // Mark as completed. The money is spent (already deducted during contribution).
+        await tx.update(goals)
+          .set({ isCompleted: true })
+          .where(eq(goals.id, id));
+    } else if (intent === "withdraw" && refundAccountId) {
+        // Withdraw the funds back to an account
         const [account] = await tx.select().from(accounts).where(and(eq(accounts.id, refundAccountId), eq(accounts.userId, userId)));
         
         if (account) {
@@ -34,15 +40,18 @@ export async function action({ request, params }: Route.ActionArgs) {
               accountId: refundAccountId,
               amount: goal.currentAmount,
               type: "income",
-              category: "other", // Or a specific refund category
-              note: `Pengembalian dana dari tujuan: ${goal.name}`,
+              category: "other",
+              note: `Penarikan dana dari tujuan: ${goal.name}`,
               occurredAt: new Date(),
             });
+            
+            // 3. Set currentAmount to 0 and mark as completed (or deleted depending on preference, let's keep it but zeroed out and completed/withdrawn)
+            // It might be cleaner to just delete it, or set isCompleted = true, currentAmount = 0.
+            await tx.update(goals)
+              .set({ isCompleted: true, currentAmount: 0 })
+              .where(eq(goals.id, id));
         }
     }
-
-    // Finally, delete the goal
-    await tx.delete(goals).where(eq(goals.id, id));
   });
 
   return redirect("/tujuan");
