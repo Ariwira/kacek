@@ -1,5 +1,5 @@
-import { useFetcher, useLoaderData, useNavigation, useRouteLoaderData } from "react-router";
-import { useState, useEffect, useRef } from "react";
+import { useFetcher, useLoaderData, useNavigation, useRouteLoaderData, Await } from "react-router";
+import { useState, useEffect, useRef, Suspense } from "react";
 import type { Route } from "./+types/_app.dashboard";
 import { Header } from "~/components/dashboard/header";
 import { SummaryRow } from "~/components/dashboard/summary-row";
@@ -10,6 +10,7 @@ import { TransactionForm } from "~/components/transaction-form";
 import { requireUserId } from "~/lib/auth.server";
 import { getDashboardData, processRecurringTransactions, getUserStats } from "~/lib/queries.server";
 import { THEMES, type CategoryKey, type Theme } from "~/components/theme";
+import { DashboardSkeleton } from "~/components/skeletons";
 
 import { STR } from "~/lib/i18n";
 import { useToast } from "~/components/toast";
@@ -17,28 +18,27 @@ import { useToast } from "~/components/toast";
 export async function loader({ request }: Route.LoaderArgs) {
   const userId = await requireUserId(request);
 
-  // Process any due recurring transactions first
+  // We await this because it updates the DB state before rendering
   await processRecurringTransactions(userId);
 
   const url = new URL(request.url);
   const range = (url.searchParams.get("range") as "week" | "month" | "year") || "month";
 
-  const [data, stats] = await Promise.all([
-    getDashboardData(userId, range),
-    getUserStats(userId),
-  ]);
-
-  const initials = (stats.name || stats.email).substring(0, 2).toUpperCase();
-
-  return { ...data, isMock: false, userInitials: initials, range };
+  // We defer the data fetching so the shell renders immediately
+  return {
+    range,
+    data: getDashboardData(userId, range),
+    stats: getUserStats(userId),
+  };
 }
 
 export default function Dashboard() {
-  const data = useLoaderData<typeof loader>();
+  const { range, data, stats } = useLoaderData<typeof loader>();
   const root = useRouteLoaderData("root") as { theme: Theme } | undefined;
   const theme: Theme = root?.theme ?? "dark";
   const T = THEMES[theme];
   const { showToast } = useToast();
+  
   const [editing, setEditing] = useState<{
     id: string;
     amount: number;
@@ -49,13 +49,13 @@ export default function Dashboard() {
     accountId?: string;
     receiptUrl?: string | null;
   } | null>(null);
+  
   const [isDeleting, setIsDeleting] = useState(false);
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
   const deleteFetcher = useFetcher();
   const navigation = useNavigation();
   const wasSubmitting = useRef(false);
 
-  // Auto-close the edit sheet when the action completes successfully.
   useEffect(() => {
     const isSubmittingEdit =
       navigation.state === "submitting" &&
@@ -70,7 +70,6 @@ export default function Dashboard() {
 
   return (
     <div className="kc-bg-gradient min-h-screen p-4 md:p-6 lg:p-7 pb-24 md:pb-8 lg:pb-7 relative overflow-x-hidden text-brand-text font-sans">
-      {/* subtle grain */}
       <div
         aria-hidden
         className={`absolute inset-0 pointer-events-none transition-opacity ${
@@ -84,34 +83,54 @@ export default function Dashboard() {
           backgroundSize: "3px 3px",
         }}
       />
+      
       <div className="max-w-[1440px] mx-auto relative">
-        <Header theme={theme} userInitials={data.userInitials} T={T} />
-        <SummaryRow theme={theme} data={data.summary} />
-        <AnalyticsAndForm
-          theme={theme}
-          breakdown={data.breakdown}
-          totalForRange={data.totalForRange}
-          expenseDelta={data.expenseDelta}
-          range={data.range}
-        />
-        <TxList
-          transactions={data.recent.filter(tx => !hiddenIds.has(String(tx.id)))}
-          totalCount={data.totalCount}
-          netThisWeek={data.netThisWeek}
-          theme={theme}
-          onEdit={(tx) =>
-            setEditing({
-              id: String(tx.id),
-              amount: tx.amount,
-              type: tx.type,
-              category: tx.cat,
-              note: tx.note,
-              accountId: tx.accountId ?? undefined,
-              receiptUrl: tx.receiptUrl,
-              date: new Date(tx.date).toISOString().slice(0, 10),
-            })
-          }
-        />
+        <Suspense fallback={<Header theme={theme} userInitials=".." T={T} />}>
+          <Await resolve={stats}>
+            {(resolvedStats) => (
+              <Header 
+                theme={theme} 
+                userInitials={(resolvedStats.name || resolvedStats.email).substring(0, 2).toUpperCase()} 
+                T={T} 
+              />
+            )}
+          </Await>
+        </Suspense>
+
+        <Suspense fallback={<DashboardSkeleton />}>
+          <Await resolve={data}>
+            {(resolvedData) => (
+              <>
+                <SummaryRow theme={theme} data={resolvedData.summary} />
+                <AnalyticsAndForm
+                  theme={theme}
+                  breakdown={resolvedData.breakdown}
+                  totalForRange={resolvedData.totalForRange}
+                  expenseDelta={resolvedData.expenseDelta}
+                  range={range}
+                />
+                <TxList
+                  transactions={resolvedData.recent.filter(tx => !hiddenIds.has(String(tx.id)))}
+                  totalCount={resolvedData.totalCount}
+                  netThisWeek={resolvedData.netThisWeek}
+                  theme={theme}
+                  onEdit={(tx) =>
+                    setEditing({
+                      id: String(tx.id),
+                      amount: tx.amount,
+                      type: tx.type,
+                      category: tx.cat,
+                      note: tx.note,
+                      accountId: tx.accountId ?? undefined,
+                      receiptUrl: tx.receiptUrl,
+                      date: new Date(tx.date).toISOString().slice(0, 10),
+                    })
+                  }
+                />
+              </>
+            )}
+          </Await>
+        </Suspense>
       </div>
 
       <BottomSheet
@@ -131,7 +150,6 @@ export default function Dashboard() {
         )}
       </BottomSheet>
 
-      {/* Custom Delete Confirmation */}
       <BottomSheet
         open={isDeleting}
         onClose={() => setIsDeleting(false)}
@@ -155,13 +173,10 @@ export default function Dashboard() {
                 if (editing) {
                   const txId = editing.id;
                   const txName = editing.note || STR.cat[editing.category as CategoryKey];
-                  
-                  // 1. Optimistic hide
                   setHiddenIds(prev => new Set(prev).add(txId));
                   setIsDeleting(false);
                   setEditing(null);
 
-                  // 2. Set delayed action
                   const timer = setTimeout(() => {
                     deleteFetcher.submit(null, {
                       method: "post",
@@ -169,7 +184,6 @@ export default function Dashboard() {
                     });
                   }, 5000);
 
-                  // 3. Show toast with Undo
                   showToast(`${txName} dihapus`, {
                     onUndo: () => {
                       clearTimeout(timer);
