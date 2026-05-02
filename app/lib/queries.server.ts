@@ -98,26 +98,28 @@ export async function getDashboardData(
   accounts: any[];
 }> {
   // Ensure accounts exist first
-  const userAccounts = await ensureUserAccounts(userId);
-
-  const rows = await db
-    .select({
-      id: transactions.id,
-      amount: transactions.amount,
-      type: transactions.type,
-      category: transactions.category,
-      note: transactions.note,
-      occurredAt: transactions.occurredAt,
-      accountId: transactions.accountId,
-      receiptUrl: transactions.receiptUrl,
-      catName: categoriesTable.name,
-      catIcon: categoriesTable.icon,
-      catColor: categoriesTable.color,
-    })
-    .from(transactions)
-    .leftJoin(categoriesTable, eq(transactions.category, categoriesTable.id))
-    .where(eq(transactions.userId, userId))
-    .orderBy(desc(transactions.occurredAt));
+  // Start all main queries in parallel to reduce round-trips
+  const [userAccounts, rows] = await Promise.all([
+    ensureUserAccounts(userId),
+    db
+      .select({
+        id: transactions.id,
+        amount: transactions.amount,
+        type: transactions.type,
+        category: transactions.category,
+        note: transactions.note,
+        occurredAt: transactions.occurredAt,
+        accountId: transactions.accountId,
+        receiptUrl: transactions.receiptUrl,
+        catName: categoriesTable.name,
+        catIcon: categoriesTable.icon,
+        catColor: categoriesTable.color,
+      })
+      .from(transactions)
+      .leftJoin(categoriesTable, eq(transactions.category, categoriesTable.id))
+      .where(eq(transactions.userId, userId))
+      .orderBy(desc(transactions.occurredAt))
+  ]);
 
   const now = new Date();
   const todayStart = startOfDay(0);
@@ -377,17 +379,18 @@ export async function getTransaction(userId: string, id: string) {
 }
 
 export async function getUserStats(userId: string) {
-  const [counts] = await db
-    .select({
-      totalTx: sql<number>`COUNT(*)`,
-    })
-    .from(transactions)
-    .where(eq(transactions.userId, userId));
-
-  const [user] = await db
-    .select()
-    .from(users)
-    .where(eq(users.id, userId));
+  const [[counts], [user]] = await Promise.all([
+    db
+      .select({
+        totalTx: sql<number>`COUNT(*)`,
+      })
+      .from(transactions)
+      .where(eq(transactions.userId, userId)),
+    db
+      .select()
+      .from(users)
+      .where(eq(users.id, userId))
+  ]);
 
   if (!user) throw new Error("User not found");
 
