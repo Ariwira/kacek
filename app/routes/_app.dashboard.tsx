@@ -25,7 +25,9 @@ export async function loader({ request }: Route.LoaderArgs) {
     const url = new URL(request.url);
     const range = (url.searchParams.get("range") as "week" | "month" | "year") || "month";
 
-    // In React Router 7, simply returning promises in an object enables streaming
+    // We return the promises directly. 
+    // In RR7, if you want streaming, you should return an object with promises.
+    // To ensure it doesn't block, we make sure NOT to await them here.
     return {
       range,
       data: getDashboardData(userId, range),
