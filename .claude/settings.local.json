@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:api.anthropic.com)",
+      "Bash(cp \"C:/Users/ariwi/.claude/projects/d--Project-portofolio-kacek/d745d640-8a44-44ed-979a-26d978bde5f5/tool-results/webfetch-1777537423435-yup3q1.bin\" /tmp/design.gz)",
+      "Read(//tmp/**)",
+      "Bash(gunzip -k -f /tmp/design.gz)",
+      "Bash(ls -la /tmp/design*)",
+      "Bash(mkdir -p /tmp/design_extract)",
+      "Bash(tar -xf /tmp/design -C /tmp/design_extract)",
+      "Bash(mkdir -p \"d:/Project/portofolio/kacek/_design_ref\")",
+      "Bash(cp -r /tmp/design_extract/tesss/* \"d:/Project/portofolio/kacek/_design_ref/\")",
+      "Bash(cp -r /tmp/scaffold/. \"d:/Project/portofolio/kacek/\")",
+      "Bash(mv /tmp/_design_ref_backup \"d:/Project/portofolio/kacek/_design_ref\")",
+      "Bash(npm install *)"
+    ]
+  }
+}

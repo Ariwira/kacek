@@ -1,0 +1,20 @@
+.DS_Store
+.env
+.env.local
+/node_modules/
+
+# React Router
+/.react-router/
+/build/
+
+# Local SQLite database
+local.db
+local.db-journal
+local.db-shm
+local.db-wal
+
+# Drizzle
+/drizzle/
+
+# Design reference (source HTML/JSX prototypes from Claude Design)
+/_design_ref/
