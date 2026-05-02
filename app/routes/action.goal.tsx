@@ -46,7 +46,7 @@ export async function action({ request }: Route.ActionArgs) {
       ...data,
     });
   }
-  return redirect("/tujuan");
+  return { success: true };
 }
 
 export function loader() {

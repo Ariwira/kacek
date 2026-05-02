@@ -130,8 +130,11 @@ function TransactionFormInner(props: {
 
   const todayISO = defaults?.date ?? new Date().toISOString().slice(0, 10);
 
+  // Filter accounts: show active ones, PLUS the currently selected archived one (if any)
+  const activeAccounts = accountsList.filter(acc => !acc.isArchived || acc.id === defaults?.accountId);
+
   // Custom States
-  const [selectedAccount, setSelectedAccount] = useState<string>(defaults?.accountId ?? accountsList[0]?.id ?? "");
+  const [selectedAccount, setSelectedAccount] = useState<string>(defaults?.accountId ?? activeAccounts[0]?.id ?? "");
   const [catOpen, setCatOpen] = useState(false);
   const [accOpen, setAccOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState(todayISO);
@@ -274,6 +277,8 @@ function TransactionFormInner(props: {
       if (scanGalleryRef.current) scanGalleryRef.current.value = "";
     }
   };
+
+  const currentAcc = activeAccounts.find((a) => a.id === selectedAccount) || activeAccounts[0];
 
   const updateAccPos = useCallback(() => {
     if (!accTriggerRef.current || !accOpen) return;
@@ -551,10 +556,11 @@ function TransactionFormInner(props: {
           className="w-full flex items-center gap-3 h-11 px-3.5 rounded-xl bg-brand-input border border-brand-hairline text-left cursor-pointer transition-all active:scale-[0.98]"
         >
           <span className="w-5 h-5 shrink-0 rounded-full bg-brand-accent-soft text-brand-accent grid place-items-center text-[10px] font-bold uppercase">
-            {accountsList.find(a => a.id === selectedAccount)?.name?.charAt(0) || "?"}
+            {activeAccounts.find(a => a.id === selectedAccount)?.name?.charAt(0) || "?"}
           </span>
           <span className="flex-1 text-sm font-semibold text-brand-text truncate">
-            {accountsList.find(a => a.id === selectedAccount)?.name || "Pilih Akun"}
+            {activeAccounts.find(a => a.id === selectedAccount)?.name || "Pilih Akun"}
+            {activeAccounts.find(a => a.id === selectedAccount)?.isArchived ? " (Arsip)" : ""}
           </span>
           <ChevronDownIcon size={14} className={`text-brand-text-mute shrink-0 transition-transform ${accOpen ? 'rotate-180' : ''}`} />
         </button>
@@ -573,7 +579,7 @@ function TransactionFormInner(props: {
               minWidth: 200,
             }}
           >
-            {accountsList.map((a) => (
+            {activeAccounts.map((a) => (
               <button
                 key={a.id}
                 type="button"
@@ -587,6 +593,7 @@ function TransactionFormInner(props: {
               >
                 <span className="text-[13px] font-semibold text-brand-text">
                   {a.name}
+                  {a.isArchived && <span className="text-[10px] bg-brand-surface-2 px-1.5 py-0.5 rounded-full ml-2 opacity-70">Arsip</span>}
                 </span>
                 {selectedAccount === a.id && <CheckIcon size={14} className="ml-auto text-brand-accent" />}
               </button>
@@ -867,7 +874,7 @@ function TransactionFormInner(props: {
     </fetcher.Form>
 
     {showAddCat && createPortal(
-      <div className="fixed inset-0 z-[10000] flex items-end sm:items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-[overlayIn_0.2s_ease-out]">
+      <div className="fixed inset-0 z-[10000] flex items-end sm:items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-[overlayIn_0.2s_ease-out]" style={{ pointerEvents: "auto" }}>
         <div className="w-full max-w-[400px] bg-brand-surface-solid rounded-3xl border border-brand-hairline shadow-2xl p-6 animate-[sheetIn_0.3s_ease-out]">
           <div className="flex items-center justify-between mb-6">
             <h3 className="text-lg font-bold text-brand-text">Kategori Baru</h3>

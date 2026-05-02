@@ -1,5 +1,5 @@
-import { useFetcher, useLoaderData, useNavigation, useRouteLoaderData } from "react-router";
-import { useState, useEffect, useRef } from "react";
+import { useFetcher, useLoaderData, useRouteLoaderData } from "react-router";
+import { useState } from "react";
 import { DatePicker } from "~/components/date-picker";
 import type { Route } from "./+types/_app.tujuan";
 import { requireUserId } from "~/lib/auth.server";
@@ -56,22 +56,6 @@ export default function TujuanPage() {
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
   
   const deleteFetcher = useFetcher();
-  const navigation = useNavigation();
-  const wasSubmitting = useRef(false);
-
-  // Auto-close the edit sheet when the action completes successfully.
-  useEffect(() => {
-    const isSubmittingEdit =
-      navigation.state === "submitting" &&
-      navigation.formAction?.startsWith("/action/goal") === true &&
-      navigation.formData?.get("id") !== null;
-    
-    if (isSubmittingEdit) wasSubmitting.current = true;
-    if (wasSubmitting.current && navigation.state === "idle") {
-      wasSubmitting.current = false;
-      setEditing(null);
-    }
-  }, [navigation.state, navigation.formAction, navigation.formData]);
 
   const visibleGoals = goals.filter(g => !hiddenIds.has(g.id));
 
@@ -135,7 +119,7 @@ export default function TujuanPage() {
                 })
               }
             >
-              <PlusIcon size={14} /> {STR.goalsEmptyCta}
+              {STR.goalsEmptyCta}
             </button>
           </GlassCard>
         ) : (
@@ -389,9 +373,9 @@ function GoalEditForm({
             <span className="font-mono text-base text-brand-text-dim font-bold shrink-0">Rp</span>
             <input
               name="targetAmount"
-              type="number"
-              min="0"
-              step="1000"
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
               required
               defaultValue={initial.targetAmount || ""}
               placeholder="0"
@@ -471,10 +455,9 @@ function ContributeForm({
         </span>
         <input
           name="amount"
-          type="number"
+          type="text"
           inputMode="numeric"
-          min="0"
-          step="1000"
+          pattern="[0-9]*"
           required
           autoFocus
           placeholder="0"

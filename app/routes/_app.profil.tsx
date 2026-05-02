@@ -3,7 +3,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import type { Route } from "./+types/_app.profil";
 import { requireUserId } from "~/lib/auth.server";
-import { getUserStats, listAccounts, createAccount, deleteAccount } from "~/lib/queries.server";
+import { getUserStats, listAccounts, listArchivedAccounts, createAccount, deleteAccount, reactivateAccount } from "~/lib/queries.server";
 import { db } from "~/lib/db.server";
 import { users } from "~/db/schema";
 import { eq } from "drizzle-orm";
@@ -20,11 +20,12 @@ import { formatIDR } from "~/lib/format";
 
 export async function loader({ request }: Route.LoaderArgs) {
   const userId = await requireUserId(request);
-  const [stats, accounts] = await Promise.all([
+  const [stats, accounts, archivedAccounts] = await Promise.all([
     getUserStats(userId),
     listAccounts(userId),
+    listArchivedAccounts(userId),
   ]);
-  return { stats, accounts };
+  return { stats, accounts, archivedAccounts };
 }
 
 export async function action({ request }: Route.ActionArgs) {
@@ -52,7 +53,13 @@ export async function action({ request }: Route.ActionArgs) {
   if (intent === "delete-account") {
     const id = formData.get("id") as string;
     await deleteAccount(userId, id);
-    return { success: "Dompet berhasil dihapus" };
+    return { success: "Dompet diproses (dihapus/diarsipkan)" };
+  }
+
+  if (intent === "reactivate-account") {
+    const id = formData.get("id") as string;
+    await reactivateAccount(userId, id);
+    return { success: "Dompet berhasil diaktifkan kembali" };
   }
 
   if (intent === "update-password") {
@@ -74,16 +81,20 @@ export async function action({ request }: Route.ActionArgs) {
 }
 
 export default function ProfilPage() {
-  const { stats, accounts } = useLoaderData<typeof loader>();
+  const { stats, accounts, archivedAccounts } = useLoaderData<typeof loader>();
   const root = useRouteLoaderData("root") as { theme: Theme } | undefined;
   const theme: Theme = root?.theme ?? "dark";
   const T = THEMES[theme];
   const { showToast } = useToast();
   
   const [accOpen, setAccOpen] = useState(false);
+  const [confirmModal, setConfirmModal] = useState<{ isOpen: boolean; type: "delete" | "reactivate" | null; id: string; name: string }>({ isOpen: false, type: null, id: "", name: "" });
+
   const nameFetcher = useFetcher();
   const passwordFetcher = useFetcher();
   const accFetcher = useFetcher();
+  const actionFetcher = useFetcher();
+
   const passwordFormRef = useRef<HTMLFormElement>(null);
   const accFormRef = useRef<HTMLFormElement>(null);
 
@@ -112,7 +123,30 @@ export default function ProfilPage() {
     if (data?.error) showToast(data.error, { type: "error" });
   }, [accFetcher.data, showToast]);
 
+  useEffect(() => {
+    const data = actionFetcher.data as { success?: string; error?: string } | undefined;
+    if (actionFetcher.state === "idle" && confirmModal.isOpen && data) {
+        if (data.success) {
+            showToast(data.success, { type: "success" });
+            setConfirmModal({ isOpen: false, type: null, id: "", name: "" });
+        }
+        if (data.error) {
+             showToast(data.error, { type: "error" });
+             setConfirmModal({ isOpen: false, type: null, id: "", name: "" });
+        }
+    }
+  }, [actionFetcher.data, actionFetcher.state, showToast]);
+
+
   const initials = (stats.name || stats.email).substring(0, 2).toUpperCase();
+
+  const handleConfirmAction = () => {
+      if(confirmModal.type === "delete") {
+         actionFetcher.submit({ intent: "delete-account", id: confirmModal.id }, { method: "post" });
+      } else if (confirmModal.type === "reactivate") {
+         actionFetcher.submit({ intent: "reactivate-account", id: confirmModal.id }, { method: "post" });
+      }
+  }
 
   return (
     <div className="kc-bg-gradient min-h-screen p-4 md:p-6 lg:p-7 pb-24 md:pb-8 lg:pb-7 text-brand-text font-sans">
@@ -145,7 +179,7 @@ export default function ProfilPage() {
           <div className="flex flex-col gap-6">
             <section>
               <div className="flex justify-between items-center mb-3 px-1">
-                <h2 className="text-sm font-bold text-brand-text-mute uppercase tracking-widest m-0">Dompet Saya</h2>
+                <h2 className="text-sm font-bold text-brand-text-mute uppercase tracking-widest m-0">Dompet Aktif</h2>
                 <button 
                   onClick={() => setAccOpen(true)}
                   className="px-3 py-1.5 rounded-lg bg-brand-accent-soft text-brand-accent text-[11px] font-bold border-none cursor-pointer flex items-center gap-1 active:scale-95 transition-all"
@@ -153,45 +187,75 @@ export default function ProfilPage() {
                   <PlusIcon size={12} /> Tambah
                 </button>
               </div>
-              <div className="flex flex-col gap-3">
-                {accounts.map(acc => (
-                  <GlassCard key={acc.id} className="p-4 flex items-center justify-between gap-4">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-11 h-11 rounded-2xl bg-brand-surface-2 border border-brand-hairline grid place-items-center text-brand-accent shrink-0 shadow-inner">
-                        {acc.type === 'bank' ? <BankIcon size={22} /> : acc.type === 'ewallet' ? <SmartphoneIcon size={22} /> : <WalletIcon size={22} />}
+              <div className="flex flex-col gap-3 mb-6">
+                {accounts.length === 0 ? (
+                   <div className="text-center py-4 text-sm text-brand-text-mute">Belum ada dompet aktif.</div>
+                ) : (
+                  accounts.map(acc => (
+                    <GlassCard key={acc.id} className="p-4 flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-11 h-11 rounded-2xl bg-brand-surface-2 border border-brand-hairline grid place-items-center text-brand-accent shrink-0 shadow-inner">
+                          {acc.type === 'bank' ? <BankIcon size={22} /> : acc.type === 'ewallet' ? <SmartphoneIcon size={22} /> : <WalletIcon size={22} />}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-sm font-bold text-brand-text truncate">{acc.name}</div>
+                          <div className="text-[11px] text-brand-text-mute uppercase tracking-wider font-semibold">{acc.type}</div>
+                        </div>
                       </div>
-                      <div className="min-w-0">
-                        <div className="text-sm font-bold text-brand-text truncate">{acc.name}</div>
-                        <div className="text-[11px] text-brand-text-mute uppercase tracking-wider font-semibold">{acc.type}</div>
+                      <div className="flex items-center gap-3">
+                        <div className="text-right">
+                          <div className="text-[13px] font-mono font-bold text-brand-text">{formatIDR(acc.balance)}</div>
+                        </div>
+                        {accounts.length > 1 && (
+                            <button 
+                              type="button" 
+                              className="w-8 h-8 rounded-lg bg-brand-red-soft text-brand-red border-none cursor-pointer grid place-items-center hover:bg-brand-red hover:text-white transition-all"
+                              onClick={() => setConfirmModal({ isOpen: true, type: "delete", id: acc.id, name: acc.name })}
+                            >
+                              <TrashIcon size={14} />
+                            </button>
+                        )}
                       </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="text-right">
-                        <div className="text-[13px] font-mono font-bold text-brand-text">{formatIDR(acc.balance)}</div>
-                      </div>
-                      {accounts.length > 1 && (
-                        <accFetcher.Form method="post">
-                          <input type="hidden" name="intent" value="delete-account" />
-                          <input type="hidden" name="id" value={acc.id} />
-                          <button 
-                            type="submit" 
-                            className="w-8 h-8 rounded-lg bg-brand-red-soft text-brand-red border-none cursor-pointer grid place-items-center hover:bg-brand-red hover:text-white transition-all"
-                            onClick={(e) => {
-                              if (!confirm(`Hapus dompet "${acc.name}"?`)) e.preventDefault();
-                            }}
-                          >
-                            <TrashIcon size={14} />
-                          </button>
-                        </accFetcher.Form>
-                      )}
-                    </div>
-                  </GlassCard>
-                ))}
+                    </GlassCard>
+                  ))
+                )}
               </div>
+
+              {archivedAccounts.length > 0 && (
+                <>
+                  <div className="flex justify-between items-center mb-3 px-1 mt-6">
+                    <h2 className="text-sm font-bold text-brand-text-mute uppercase tracking-widest m-0">Dompet Diarsipkan</h2>
+                  </div>
+                  <div className="flex flex-col gap-3">
+                    {archivedAccounts.map(acc => (
+                      <GlassCard key={acc.id} className="p-4 flex items-center justify-between gap-4 opacity-70 hover:opacity-100 transition-opacity">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-11 h-11 rounded-2xl bg-brand-surface-2 border border-brand-hairline grid place-items-center text-brand-text-mute shrink-0 shadow-inner grayscale">
+                            {acc.type === 'bank' ? <BankIcon size={22} /> : acc.type === 'ewallet' ? <SmartphoneIcon size={22} /> : <WalletIcon size={22} />}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="text-sm font-bold text-brand-text truncate">{acc.name} <span className="text-[10px] bg-brand-surface-solid px-2 py-0.5 rounded-full ml-1">Arsip</span></div>
+                            <div className="text-[11px] text-brand-text-mute uppercase tracking-wider font-semibold">{acc.type}</div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                           <button 
+                              type="button" 
+                              className="px-3 py-1.5 rounded-lg bg-brand-surface-2 text-brand-text text-[11px] font-bold border border-brand-hairline cursor-pointer hover:bg-brand-accent-soft hover:text-brand-accent transition-all whitespace-nowrap"
+                              onClick={() => setConfirmModal({ isOpen: true, type: "reactivate", id: acc.id, name: acc.name })}
+                            >
+                              Aktifkan
+                            </button>
+                        </div>
+                      </GlassCard>
+                    ))}
+                  </div>
+                </>
+              )}
             </section>
 
             <section>
-              <h2 className="text-sm font-bold text-brand-text-mute uppercase tracking-widest mb-3 px-1">Pengaturan Profil</h2>
+              <h2 className="text-sm font-bold text-brand-text-mute uppercase tracking-widest mb-3 px-1 mt-6">Pengaturan Profil</h2>
               <GlassCard className="p-6">
                 <nameFetcher.Form method="post" className="flex flex-col gap-4">
                   <input type="hidden" name="intent" value="update-name" />
@@ -216,7 +280,7 @@ export default function ProfilPage() {
             </section>
 
             <section>
-              <h2 className="text-sm font-bold text-brand-text-mute uppercase tracking-widest mb-3 px-1">Keamanan</h2>
+              <h2 className="text-sm font-bold text-brand-text-mute uppercase tracking-widest mb-3 px-1 mt-6">Keamanan</h2>
               <GlassCard className="p-6">
                 <passwordFetcher.Form method="post" ref={passwordFormRef} className="flex flex-col gap-4">
                   <input type="hidden" name="intent" value="update-password" />
@@ -250,7 +314,7 @@ export default function ProfilPage() {
             </section>
 
             <section>
-              <h2 className="text-sm font-bold text-brand-text-mute uppercase tracking-widest mb-3 px-1">Sesi</h2>
+              <h2 className="text-sm font-bold text-brand-text-mute uppercase tracking-widest mb-3 px-1 mt-6">Sesi</h2>
               <GlassCard className="p-6">
                 <p className="text-xs text-brand-text-dim mb-4 leading-relaxed">
                   Keluar dari akun Anda di perangkat ini. Anda perlu masuk kembali untuk mengakses data Anda.
@@ -270,12 +334,56 @@ export default function ProfilPage() {
         </div>
       </div>
 
+      {/* Wallet Form Bottom Sheet */}
       <BottomSheet 
         open={accOpen} 
         onClose={() => setAccOpen(false)}
         title="Tambah Dompet Baru"
       >
         <TambahDompetForm fetcher={accFetcher} formRef={accFormRef} theme={theme} />
+      </BottomSheet>
+
+      {/* Confirmation Modal */}
+      <BottomSheet 
+        open={confirmModal.isOpen} 
+        onClose={() => {
+            if(actionFetcher.state === "idle") {
+                setConfirmModal({ isOpen: false, type: null, id: "", name: "" });
+            }
+        }}
+        title={confirmModal.type === "delete" ? "Hapus Dompet" : "Aktifkan Dompet"}
+      >
+         <div className="p-4 pt-1 flex flex-col gap-6">
+            <p className="text-brand-text text-sm leading-relaxed m-0 text-center">
+              {confirmModal.type === "delete" 
+                ? `Apakah Anda yakin ingin menghapus dompet "${confirmModal.name}"? Jika dompet memiliki transaksi historis, dompet ini akan diarsipkan untuk menjaga laporan Anda.`
+                : `Apakah Anda ingin mengaktifkan kembali dompet "${confirmModal.name}" agar bisa digunakan untuk mencatat transaksi lagi?`
+              }
+            </p>
+            <div className="flex gap-3">
+              <button 
+                onClick={() => setConfirmModal({ isOpen: false, type: null, id: "", name: "" })}
+                className="flex-1 h-12 rounded-xl bg-brand-surface-2 text-brand-text font-bold text-sm border-none cursor-pointer"
+                disabled={actionFetcher.state !== "idle"}
+              >
+                Batal
+              </button>
+              <button 
+                onClick={handleConfirmAction}
+                disabled={actionFetcher.state !== "idle"}
+                className={`flex-1 h-12 rounded-xl font-bold text-sm border-none cursor-pointer flex items-center justify-center ${
+                    confirmModal.type === "delete"
+                        ? "bg-brand-red text-white"
+                        : "bg-brand-accent text-[#06180F]"
+                }`}
+              >
+                 {actionFetcher.state !== "idle" 
+                    ? "Memproses..." 
+                    : confirmModal.type === "delete" ? "Ya, Hapus" : "Ya, Aktifkan"
+                 }
+              </button>
+            </div>
+         </div>
       </BottomSheet>
     </div>
   );
@@ -385,9 +493,11 @@ function TambahDompetForm({
           }`}
         >
           <span className="font-mono text-xl text-brand-text-dim mr-1.5">Rp</span>
-          <input 
-            name="initialBalance" 
-            type="number" 
+          <input
+            name="initialBalance"
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
             placeholder="0"
             className="font-mono text-2xl font-bold text-brand-text tracking-[-0.5px] bg-transparent border-none outline-none w-full py-2"
           />

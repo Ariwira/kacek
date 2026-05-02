@@ -51,7 +51,7 @@ export async function action({ request }: Route.ActionArgs) {
       month,
     });
   }
-  return redirect("/anggaran");
+  return { success: true };
 }
 
 export function loader() {

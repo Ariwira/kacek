@@ -280,12 +280,11 @@ function BudgetEditForm({
         </span>
         <input
           name="amount"
-          type="number"
+          type="text"
           inputMode="numeric"
-          min="0"
-          step="1000"
+          pattern="[0-9]*"
           required
-          defaultValue={initial}
+          defaultValue={initial || ""}
           autoFocus
           className="font-mono text-[22px] font-bold text-brand-text bg-transparent border-none outline-none w-full"
         />

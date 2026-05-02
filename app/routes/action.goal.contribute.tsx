@@ -24,7 +24,7 @@ export async function action({ request, params }: Route.ActionArgs) {
       currentAmount: sql`${goals.currentAmount} + ${parsed.data.amount}`,
     })
     .where(and(eq(goals.id, id), eq(goals.userId, userId)));
-  return redirect("/tujuan");
+  return { success: true };
 }
 
 export function loader() {
