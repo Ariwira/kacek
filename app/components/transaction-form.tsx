@@ -427,7 +427,7 @@ function TransactionFormInner(props: {
     <div
       ref={scanMenuRef}
       className="fixed z-[9999] py-1.5 rounded-xl bg-brand-surface-solid border border-brand-hairline shadow-2xl animate-in fade-in zoom-in-95 duration-150 origin-top-left"
-      style={{ top: scanMenuPos.top, left: scanMenuPos.left, minWidth: 160 }}
+      style={{ top: scanMenuPos.top, left: scanMenuPos.left, minWidth: 160, pointerEvents: "auto" }}
     >
       <button
         type="button"
