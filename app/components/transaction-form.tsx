@@ -1,5 +1,5 @@
-import { useFetcher, useRouteLoaderData } from "react-router";
-import { useState, useEffect, useRef, useCallback, type ReactNode } from "react";
+import { useFetcher, useRouteLoaderData, Await } from "react-router";
+import { useState, useEffect, useRef, useCallback, Suspense, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import {
   CatIcon,
@@ -47,6 +47,31 @@ export function TransactionForm(props: {
   customAction?: string;
   onFormSuccess?: () => void;
 }) {
+  const appData = useRouteLoaderData("routes/_app") as { accounts: any, categories: any } | undefined;
+
+  return (
+    <Suspense fallback={<div className="p-4 text-center text-xs text-brand-text-dim">Memuat data form...</div>}>
+      <Await resolve={Promise.all([appData?.accounts, appData?.categories])}>
+        {([accounts, categories]) => (
+          <TransactionFormInner {...props} accountsList={accounts || []} customCategories={categories || []} />
+        )}
+      </Await>
+    </Suspense>
+  );
+}
+
+function TransactionFormInner(props: {
+  T?: ThemeTokens;
+  dark: boolean;
+  mode?: "add" | "edit";
+  defaults?: TransactionFormDefaults;
+  onDelete?: () => void;
+  compact?: boolean;
+  customAction?: string;
+  onFormSuccess?: () => void;
+  accountsList: any[];
+  customCategories: Category[];
+}) {
   const {
     dark,
     mode = "add",
@@ -55,12 +80,12 @@ export function TransactionForm(props: {
     compact = false,
     customAction,
     onFormSuccess,
+    accountsList,
+    customCategories,
   } = props;
 
   const fetcher = useFetcher();
-  const appData = useRouteLoaderData("routes/_app") as { accounts: any[], categories: Category[] } | undefined;
-  const accountsList = appData?.accounts ?? [];
-  const customCategories = appData?.categories ?? [];
+  // ... removed appData usage here as it's passed via props now
 
   const isEdit = mode === "edit" && defaults?.id;
   const [selectedCat, setSelectedCat] = useState<string>(defaults?.category ?? "food");
