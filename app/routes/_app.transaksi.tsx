@@ -208,7 +208,7 @@ export default function TransaksiPage() {
             {([resolvedTx, resolvedRecurring, resolvedUserCats]) => {
               // Group by date label
               const visibleTx = resolvedTx.filter((tx) => !hiddenIds.has(String(tx.id)));
-              const map = new Map<string, typeof resolvedTx>();
+              const map = new Map<string, any[]>();
               for (const tx of visibleTx) {
                 const key = formatRelativeDay(tx.date);
                 if (!map.has(key)) map.set(key, []);
