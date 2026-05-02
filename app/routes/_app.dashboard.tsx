@@ -19,32 +19,33 @@ export async function loader({ request }: Route.LoaderArgs) {
   const userId = await requireUserId(request);
 
   try {
-    // Process any due recurring transactions first
+    // Process recurring transactions
     await processRecurringTransactions(userId);
 
     const url = new URL(request.url);
     const range = (url.searchParams.get("range") as "week" | "month" | "year") || "month";
 
-    // Use defer() to enable streaming
+    // Start fetching but don't await yet
+    const dataPromise = getDashboardData(userId, range);
+    const statsPromise = getUserStats(userId);
+
     return defer({
       range,
-      data: getDashboardData(userId, range).catch(e => {
-        console.error("Dashboard Data Error:", e);
-        throw e;
-      }),
-      stats: getUserStats(userId).catch(e => {
-        console.error("User Stats Error:", e);
-        throw e;
-      }),
+      data: dataPromise,
+      stats: statsPromise,
     });
   } catch (error) {
-    console.error("Loader Error:", error);
+    console.error("Dashboard Loader Error:", error);
     throw new Response("Internal Server Error", { status: 500 });
   }
 }
 
 export default function Dashboard() {
-  const { range, data, stats } = useLoaderData<typeof loader>();
+  const loaderData = useLoaderData<typeof loader>();
+  
+  // Guard for TypeScript
+  if (!loaderData) return null;
+  const { range, data, stats } = loaderData;
   const root = useRouteLoaderData("root") as { theme: Theme } | undefined;
   const theme: Theme = root?.theme ?? "dark";
   const T = THEMES[theme];
