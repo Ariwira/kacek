@@ -1,5 +1,5 @@
-import { Outlet, useNavigation, useRouteLoaderData, useLocation } from "react-router";
-import { useEffect, useRef, useState } from "react";
+import { Outlet, useNavigation, useRouteLoaderData, useLocation, Await } from "react-router";
+import { Suspense, useEffect, useRef, useState } from "react";
 import type { Route } from "./+types/_app";
 import { requireUserId } from "~/lib/auth.server";
 import { db } from "~/lib/db.server";
@@ -18,16 +18,20 @@ import { useFetcher } from "react-router";
 
 export async function loader({ request }: Route.LoaderArgs) {
   const userId = await requireUserId(request);
-  const [rows, accounts, notifications, categories] = await Promise.all([
-    db
-      .select({ id: users.id, email: users.email, name: users.name })
-      .from(users)
-      .where(eq(users.id, userId)),
-    ensureUserAccounts(userId),
-    listNotifications(userId),
-    db.select().from(categoriesTable).where(eq(categoriesTable.userId, userId)).orderBy(desc(categoriesTable.createdAt)),
-  ]);
-  return { user: rows[0] ?? null, accounts, notifications, categories };
+  
+  // Await only the user to ensure layout basic data is ready
+  const userPromise = db
+    .select({ id: users.id, email: users.email, name: users.name })
+    .from(users)
+    .where(eq(users.id, userId))
+    .then(rows => rows[0] || null);
+
+  return { 
+    user: await userPromise, 
+    accounts: ensureUserAccounts(userId), 
+    notifications: listNotifications(userId), 
+    categories: db.select().from(categoriesTable).where(eq(categoriesTable.userId, userId)).orderBy(desc(categoriesTable.createdAt))
+  };
 }
 
 export default function AppLayout() {
@@ -102,48 +106,56 @@ export default function AppLayout() {
         title="Notifikasi"
       >
         <div className="flex flex-col gap-3 p-1">
-          {notifications.length === 0 ? (
-            <div className="text-center py-12">
-              <div className="w-16 h-16 rounded-full bg-brand-surface-2 grid place-items-center mx-auto mb-4">
-                <BellIcon size={24} className="text-brand-text-mute" />
-              </div>
-              <p className="text-sm text-brand-text-mute">Belum ada notifikasi baru.</p>
-            </div>
-          ) : (
-            notifications.map((n: any) => (
-              <div 
-                key={n.id} 
-                className={`p-4 rounded-2xl border transition-all ${
-                  n.isRead 
-                    ? "bg-brand-surface-1 border-brand-hairline opacity-60" 
-                    : "bg-brand-surface-2 border-brand-accent/20"
-                }`}
-              >
-                <div className="flex justify-between items-start gap-3">
-                  <div className="min-w-0 flex-1">
-                    <h4 className={`text-sm font-bold mb-1 ${n.isRead ? "text-brand-text-dim" : "text-brand-text"}`}>
-                      {n.title}
-                    </h4>
-                    <p className="text-xs text-brand-text-dim leading-relaxed">
-                      {n.message}
-                    </p>
-                    <div className="text-[10px] text-brand-text-mute mt-2">
-                      {new Date(n.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+          <Suspense fallback={<div className="text-center py-12 text-sm text-brand-text-mute">Memuat notifikasi...</div>}>
+            <Await resolve={rootData?.notifications}>
+              {(resolvedNotifications: any[]) => (
+                <>
+                  {!resolvedNotifications || resolvedNotifications.length === 0 ? (
+                    <div className="text-center py-12">
+                      <div className="w-16 h-16 rounded-full bg-brand-surface-2 grid place-items-center mx-auto mb-4">
+                        <BellIcon size={24} className="text-brand-text-mute" />
+                      </div>
+                      <p className="text-sm text-brand-text-mute">Belum ada notifikasi baru.</p>
                     </div>
-                  </div>
-                  {!n.isRead && (
-                    <button
-                      onClick={() => fetcher.submit({ id: n.id }, { method: "post", action: "/action/notification/read" })}
-                      className="w-8 h-8 rounded-lg bg-brand-accent-soft text-brand-accent border-none cursor-pointer grid place-items-center transition-all hover:bg-brand-accent hover:text-white"
-                      title="Tandai dibaca"
-                    >
-                      <CheckIcon size={14} />
-                    </button>
+                  ) : (
+                    resolvedNotifications.map((n: any) => (
+                      <div 
+                        key={n.id} 
+                        className={`p-4 rounded-2xl border transition-all ${
+                          n.isRead 
+                            ? "bg-brand-surface-1 border-brand-hairline opacity-60" 
+                            : "bg-brand-surface-2 border-brand-accent/20"
+                        }`}
+                      >
+                        <div className="flex justify-between items-start gap-3">
+                          <div className="min-w-0 flex-1">
+                            <h4 className={`text-sm font-bold mb-1 ${n.isRead ? "text-brand-text-dim" : "text-brand-text"}`}>
+                              {n.title}
+                            </h4>
+                            <p className="text-xs text-brand-text-dim leading-relaxed">
+                              {n.message}
+                            </p>
+                            <div className="text-[10px] text-brand-text-mute mt-2">
+                              {new Date(n.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                            </div>
+                          </div>
+                          {!n.isRead && (
+                            <button
+                              onClick={() => fetcher.submit({ id: n.id }, { method: "post", action: "/action/notification/read" })}
+                              className="w-8 h-8 rounded-lg bg-brand-accent-soft text-brand-accent border-none cursor-pointer grid place-items-center transition-all hover:bg-brand-accent hover:text-white"
+                              title="Tandai dibaca"
+                            >
+                              <CheckIcon size={14} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))
                   )}
-                </div>
-              </div>
-            ))
-          )}
+                </>
+              )}
+            </Await>
+          </Suspense>
         </div>
       </BottomSheet>
     </>
