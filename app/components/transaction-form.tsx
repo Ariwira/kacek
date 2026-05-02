@@ -179,34 +179,45 @@ function TransactionFormInner(props: {
 
       const { data: { text } } = await worker.recognize(file);
 
-      // Better Extraction Logic
+      // Amount extraction with tiered priority:
+      // Tier 1 — "Grand Total" / "Total Bayar" line (beats subtotal, taxes, etc.)
+      // Tier 2 — any line with total/jumlah/bayar keyword that isn't a subtotal
+      // Tier 3 — largest number seen overall (fallback)
       const lines = text.split('\n');
-      let foundAmount = 0;
-      let prioritizedAmount = 0;
+      let foundAmount = 0;       // tier 3: largest number overall
+      let totalAmount = 0;       // tier 2: keyword match excl. subtotal
+      let grandTotalAmount = 0;  // tier 1: "grand" or explicit grand total line
+
+      const parseAmount = (token: string): number => {
+        if (/[0-9]+[/-][0-9]+[/-][0-9]+/.test(token)) return 0; // skip dates
+        const digits = token.replace(/[,.](?=[0-9]{3,})/g, "").replace(/[^0-9]/g, "");
+        const val = parseInt(digits);
+        return !isNaN(val) && val >= 1000 && val < 50_000_000 ? val : 0;
+      };
 
       for (const line of lines) {
         const cleanLine = line.replace(/[|[\]]/g, "").trim();
         if (!cleanLine) continue;
 
-        const tokens = cleanLine.split(/[\s]/);
-        
-        for (const token of tokens) {
-          if (/[0-9]+[/-][0-9]+[/-][0-9]+/.test(token)) continue;
+        for (const token of cleanLine.split(/\s+/)) {
+          const val = parseAmount(token);
+          if (!val) continue;
 
-          const onlyDigits = token.replace(/[,.](?=[0-9]{3,})/g, "").replace(/[^0-9]/g, "");
-          const val = parseInt(onlyDigits);
+          if (val > foundAmount) foundAmount = val;
 
-          if (!isNaN(val) && val >= 500 && val < 20000000) {
-            if (/total|jumlah|grand|bayar|net|tagihan|summary/i.test(cleanLine)) {
-              if (val > prioritizedAmount) prioritizedAmount = val;
-            }
-            
-            if (val > foundAmount) foundAmount = val;
+          const isGrand = /grand\s*total|total\s*bayar|grand\s*bill|total\s*bill/i.test(cleanLine);
+          const isTotal = /total|jumlah|bayar|tagihan|net|summary/i.test(cleanLine);
+          const isSubtotal = /sub\s*total|subtotal/i.test(cleanLine);
+
+          if (isGrand && val > grandTotalAmount) {
+            grandTotalAmount = val;
+          } else if (isTotal && !isSubtotal && val > totalAmount) {
+            totalAmount = val;
           }
         }
       }
 
-      const finalAmount = prioritizedAmount || foundAmount;
+      const finalAmount = grandTotalAmount || totalAmount || foundAmount;
 
       if (finalAmount > 0) {
         setRawAmount(finalAmount.toString());
@@ -389,11 +400,13 @@ function TransactionFormInner(props: {
         <div className="flex items-center justify-between mb-4">
           {!isEdit && (
             <div className="flex items-center gap-2">
-              <input 
-                type="file" 
-                ref={scanInputRef} 
-                className="hidden" 
-                accept="image/*" 
+              {/* capture="environment" opens rear camera directly on mobile */}
+              <input
+                type="file"
+                ref={scanInputRef}
+                className="hidden"
+                accept="image/*"
+                capture="environment"
                 onChange={(e) => e.target.files?.[0] && handleScan(e.target.files[0])}
               />
               <button
@@ -420,11 +433,12 @@ function TransactionFormInner(props: {
               </div>
               {!isEdit && (
                 <>
-                  <input 
-                    type="file" 
-                    ref={scanInputRef} 
-                    className="hidden" 
-                    accept="image/*" 
+                  <input
+                    type="file"
+                    ref={scanInputRef}
+                    className="hidden"
+                    accept="image/*"
+                    capture="environment"
                     onChange={(e) => e.target.files?.[0] && handleScan(e.target.files[0])}
                   />
                   <button
