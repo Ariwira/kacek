@@ -18,18 +18,29 @@ import { useToast } from "~/components/toast";
 export async function loader({ request }: Route.LoaderArgs) {
   const userId = await requireUserId(request);
 
-  // Process any due recurring transactions first
-  await processRecurringTransactions(userId);
+  try {
+    // Process any due recurring transactions first
+    await processRecurringTransactions(userId);
 
-  const url = new URL(request.url);
-  const range = (url.searchParams.get("range") as "week" | "month" | "year") || "month";
+    const url = new URL(request.url);
+    const range = (url.searchParams.get("range") as "week" | "month" | "year") || "month";
 
-  // Use defer() to enable streaming
-  return defer({
-    range,
-    data: getDashboardData(userId, range),
-    stats: getUserStats(userId),
-  });
+    // Use defer() to enable streaming
+    return defer({
+      range,
+      data: getDashboardData(userId, range).catch(e => {
+        console.error("Dashboard Data Error:", e);
+        throw e;
+      }),
+      stats: getUserStats(userId).catch(e => {
+        console.error("User Stats Error:", e);
+        throw e;
+      }),
+    });
+  } catch (error) {
+    console.error("Loader Error:", error);
+    throw new Response("Internal Server Error", { status: 500 });
+  }
 }
 
 export default function Dashboard() {
