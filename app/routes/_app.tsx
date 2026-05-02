@@ -31,24 +31,30 @@ export async function loader({ request }: Route.LoaderArgs) {
         return null;
       });
 
-    // Notifications are accessed synchronously by Header (unread badge), so await
-    // them eagerly. Calling .filter() on a deferred Promise crashes SSR with a 500.
-    const notifications = await listNotifications(userId).catch(e => {
-      console.error("Layout Notifications Error:", e);
-      return [];
-    });
+    // These are all small queries consumed synchronously by Header (unread badge)
+    // and TransactionForm (accounts/categories dropdown). Returning them as deferred
+    // promises causes the form to remount on every revalidation — which loses the
+    // "submit succeeded" effect (form never closes) and flashes the loading state.
+    const [notifications, accountsList, categoriesList] = await Promise.all([
+      listNotifications(userId).catch(e => {
+        console.error("Layout Notifications Error:", e);
+        return [];
+      }),
+      ensureUserAccounts(userId).catch(e => {
+        console.error("Layout Accounts Error:", e);
+        return [];
+      }),
+      db.select().from(categoriesTable).where(eq(categoriesTable.userId, userId)).orderBy(desc(categoriesTable.createdAt)).catch(e => {
+        console.error("Layout Categories Error:", e);
+        return [];
+      }),
+    ]);
 
     return {
       user,
       notifications,
-      accounts: ensureUserAccounts(userId).catch(e => {
-        console.error("Layout Accounts Error:", e);
-        return [];
-      }),
-      categories: db.select().from(categoriesTable).where(eq(categoriesTable.userId, userId)).orderBy(desc(categoriesTable.createdAt)).catch(e => {
-        console.error("Layout Categories Error:", e);
-        return [];
-      }),
+      accounts: accountsList,
+      categories: categoriesList,
     };
   } catch (error) {
     // If requireUserId redirects, let it through

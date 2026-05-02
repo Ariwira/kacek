@@ -1,5 +1,5 @@
-import { useFetcher, useRouteLoaderData, Await } from "react-router";
-import { useState, useEffect, useRef, useCallback, Suspense, type ReactNode } from "react";
+import { useFetcher, useRouteLoaderData } from "react-router";
+import { useState, useEffect, useRef, useCallback, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import {
   CatIcon,
@@ -16,6 +16,7 @@ import { STR } from "~/lib/i18n";
 import { formatIDR, monthNameID } from "~/lib/format";
 import { createWorker } from "tesseract.js";
 import { ScanIcon } from "./icons-extra";
+import { useToast } from "~/components/toast";
 import type { Category } from "~/db/schema";
 
 const CATEGORY_OPTIONS: CategoryKey[] = [
@@ -47,16 +48,16 @@ export function TransactionForm(props: {
   customAction?: string;
   onFormSuccess?: () => void;
 }) {
-  const appData = useRouteLoaderData("routes/_app") as { accounts: any, categories: any } | undefined;
+  const appData = useRouteLoaderData("routes/_app") as
+    | { accounts: any[]; categories: Category[] }
+    | undefined;
 
   return (
-    <Suspense fallback={<div className="p-4 text-center text-xs text-brand-text-dim">Memuat data form...</div>}>
-      <Await resolve={Promise.all([appData?.accounts, appData?.categories])}>
-        {([accounts, categories]) => (
-          <TransactionFormInner {...props} accountsList={accounts || []} customCategories={categories || []} />
-        )}
-      </Await>
-    </Suspense>
+    <TransactionFormInner
+      {...props}
+      accountsList={appData?.accounts ?? []}
+      customCategories={appData?.categories ?? []}
+    />
   );
 }
 
@@ -85,7 +86,7 @@ function TransactionFormInner(props: {
   } = props;
 
   const fetcher = useFetcher();
-  // ... removed appData usage here as it's passed via props now
+  const { showToast } = useToast();
 
   const isEdit = mode === "edit" && defaults?.id;
   const [selectedCat, setSelectedCat] = useState<string>(defaults?.category ?? "food");
@@ -150,20 +151,33 @@ function TransactionFormInner(props: {
 
   const handleScan = async (file: File) => {
     if (!file) return;
+
+    // Phone cameras can produce 8–15MB photos; tesseract WASM struggles past ~10MB
+    // on mobile and silently OOMs. Guard early with a friendly message.
+    const MAX_BYTES = 8 * 1024 * 1024;
+    if (file.size > MAX_BYTES) {
+      showToast("Foto terlalu besar (maks 8MB). Coba kompres dulu.", { type: "error" });
+      return;
+    }
+    if (!file.type.startsWith("image/")) {
+      showToast("File harus berupa gambar.", { type: "error" });
+      return;
+    }
+
     setIsScanning(true);
     setScanProgress(0);
 
+    let worker: Awaited<ReturnType<typeof createWorker>> | null = null;
     try {
-      const worker = await createWorker('ind', 1, {
+      worker = await createWorker('ind', 1, {
         logger: m => {
           if (m.status === 'recognizing text') {
             setScanProgress(Math.round(m.progress * 100));
           }
         }
       });
-      
+
       const { data: { text } } = await worker.recognize(file);
-      await worker.terminate();
 
       // Better Extraction Logic
       const lines = text.split('\n');
@@ -229,10 +243,18 @@ function TransactionFormInner(props: {
         if (noteInput) noteInput.value = merchantLine.trim().substring(0, 50);
       }
 
+      if (finalAmount === 0 && !merchantLine) {
+        showToast("Tidak ada teks yang terbaca. Coba foto lebih dekat.", { type: "info" });
+      }
     } catch (err) {
       console.error("OCR Error:", err);
+      const msg = err instanceof Error ? err.message : "Gagal memproses gambar.";
+      showToast(`Scan gagal: ${msg.substring(0, 80)}`, { type: "error" });
     } finally {
+      try { await worker?.terminate(); } catch {}
       setIsScanning(false);
+      // Reset the input so picking the same file again re-fires onChange
+      if (scanInputRef.current) scanInputRef.current.value = "";
     }
   };
 
