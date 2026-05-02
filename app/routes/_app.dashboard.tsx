@@ -30,8 +30,22 @@ export async function loader({ request }: Route.LoaderArgs) {
     // To ensure it doesn't block, we make sure NOT to await them here.
     return {
       range,
-      data: getDashboardData(userId, range),
-      stats: getUserStats(userId),
+      data: getDashboardData(userId, range).catch(e => {
+        console.error("Dashboard Data Error:", e);
+        return {
+          summary: { totalBalance: 0, income: 0, expense: 0 },
+          breakdown: [],
+          totalForRange: 0,
+          expenseDelta: 0,
+          recent: [],
+          totalCount: 0,
+          netThisWeek: 0,
+        };
+      }),
+      stats: getUserStats(userId).catch(e => {
+        console.error("Dashboard Stats Error:", e);
+        return {};
+      }),
     };
   } catch (error) {
     console.error("Dashboard Loader Error:", error);
@@ -101,7 +115,11 @@ export default function Dashboard() {
             {(resolvedStats) => (
               <Header 
                 theme={theme} 
-                userInitials={(resolvedStats.name || resolvedStats.email).substring(0, 2).toUpperCase()} 
+                userInitials={
+                  resolvedStats?.name || resolvedStats?.email 
+                    ? (resolvedStats.name || resolvedStats.email).substring(0, 2).toUpperCase()
+                    : "??"
+                } 
                 T={T} 
               />
             )}
