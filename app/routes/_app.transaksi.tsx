@@ -51,13 +51,25 @@ export async function loader({ request }: Route.LoaderArgs) {
     to: url.searchParams.get("to"),
   };
 
-  // Deferred data for streaming
+  // Deferred data for streaming with error boundaries
   return {
     filters,
-    transactions: listTransactions(userId, filters),
-    recurring: listRecurringTransactions(userId),
-    stats: getUserStats(userId),
-    userCategories: db.select().from(categoriesTable).where(eq(categoriesTable.userId, userId)),
+    transactions: listTransactions(userId, filters).catch(e => {
+      console.error("List Transactions Error:", e);
+      return [];
+    }),
+    recurring: listRecurringTransactions(userId).catch(e => {
+      console.error("List Recurring Error:", e);
+      return [];
+    }),
+    stats: getUserStats(userId).catch(e => {
+      console.error("User Stats Error:", e);
+      return {};
+    }),
+    userCategories: db.select().from(categoriesTable).where(eq(categoriesTable.userId, userId)).catch(e => {
+      console.error("User Categories Error:", e);
+      return [];
+    }),
   };
 }
 
@@ -142,7 +154,11 @@ export default function TransaksiPage() {
               <Header 
                 theme={theme} 
                 T={T} 
-                userInitials={(resolvedStats.name || resolvedStats.email).substring(0, 2).toUpperCase()} 
+                userInitials={
+                  resolvedStats?.name || resolvedStats?.email 
+                    ? (resolvedStats.name || resolvedStats.email).substring(0, 2).toUpperCase()
+                    : "??"
+                } 
               />
             )}
           </Await>
