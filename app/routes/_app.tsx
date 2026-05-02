@@ -117,7 +117,7 @@ export default function AppLayout() {
         <div className="flex flex-col gap-3 p-1">
           <Suspense fallback={<div className="text-center py-12 text-sm text-brand-text-mute">Memuat notifikasi...</div>}>
             <Await resolve={rootData?.notifications}>
-              {(resolvedNotifications: any[]) => (
+              {(resolvedNotifications: any) => (
                 <>
                   {!resolvedNotifications || resolvedNotifications.length === 0 ? (
                     <div className="text-center py-12">
