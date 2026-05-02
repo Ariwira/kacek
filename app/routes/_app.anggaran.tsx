@@ -32,7 +32,12 @@ export async function loader({ request }: Route.LoaderArgs) {
     }),
     stats: getUserStats(userId).catch(e => {
       console.error("Budget Stats Error:", e);
-      return {};
+      return {
+        totalTx: 0,
+        joinedAt: new Date(),
+        name: "",
+        email: "",
+      };
     }),
   };
 }

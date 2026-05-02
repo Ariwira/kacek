@@ -64,7 +64,12 @@ export async function loader({ request }: Route.LoaderArgs) {
     }),
     stats: getUserStats(userId).catch(e => {
       console.error("User Stats Error:", e);
-      return {};
+      return {
+        totalTx: 0,
+        joinedAt: new Date(),
+        name: "",
+        email: "",
+      };
     }),
     userCategories: db.select().from(categoriesTable).where(eq(categoriesTable.userId, userId)).catch(e => {
       console.error("User Categories Error:", e);

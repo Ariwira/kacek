@@ -33,18 +33,36 @@ export async function loader({ request }: Route.LoaderArgs) {
       data: getDashboardData(userId, range).catch(e => {
         console.error("Dashboard Data Error:", e);
         return {
-          summary: { totalBalance: 0, income: 0, expense: 0 },
+          summary: { 
+            totalExpenses: 0,
+            budget: 0,
+            last7Total: 0,
+            last7Days: [0, 0, 0, 0, 0, 0, 0],
+            expenseDelta: 0,
+            balance: 0,
+            receivedToday: 0,
+            accounts: [],
+            income: 0,
+            incomeDelta: 0,
+            incomeTrend: new Array(12).fill(0),
+          },
           breakdown: [],
           totalForRange: 0,
           expenseDelta: 0,
           recent: [],
           totalCount: 0,
           netThisWeek: 0,
+          accounts: [],
         };
       }),
       stats: getUserStats(userId).catch(e => {
         console.error("Dashboard Stats Error:", e);
-        return {};
+        return {
+          totalTx: 0,
+          joinedAt: new Date(),
+          name: "",
+          email: "",
+        };
       }),
     };
   } catch (error) {
