@@ -1,4 +1,6 @@
-import { useFetcher, useLoaderData, useNavigation, useRouteLoaderData, Await, defer } from "react-router";
+import * as RR from "react-router";
+import { useFetcher, useLoaderData, useNavigation, useRouteLoaderData, Await } from "react-router";
+const { defer } = RR;
 import { useState, useEffect, useRef, Suspense } from "react";
 import type { Route } from "./+types/_app.dashboard";
 import { Header } from "~/components/dashboard/header";
