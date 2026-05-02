@@ -73,3 +73,36 @@ export function DashboardSkeleton() {
     </div>
   );
 }
+
+export function TransactionSkeleton() {
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-col gap-2.5 mt-3">
+        <Skeleton className="w-full h-12 rounded-xl" />
+        <div className="flex gap-2">
+           <Skeleton className="w-20 h-8 rounded-full" />
+           <Skeleton className="w-20 h-8 rounded-full" />
+           <Skeleton className="w-20 h-8 rounded-full" />
+        </div>
+      </div>
+      
+      <GlassCard className="p-6 mt-3.5 space-y-6">
+        {[1, 2].map(group => (
+          <div key={group} className="space-y-3">
+            <Skeleton className="w-24 h-3 mb-4" />
+            {[1, 2, 3].map(i => (
+              <div key={i} className="flex items-center gap-4 py-2">
+                <Skeleton className="w-10 h-10 rounded-xl" />
+                <div className="flex-1 space-y-2">
+                  <Skeleton className="w-1/2 h-4" />
+                  <Skeleton className="w-1/4 h-3" />
+                </div>
+                <Skeleton className="w-24 h-5" />
+              </div>
+            ))}
+          </div>
+        ))}
+      </GlassCard>
+    </div>
+  );
+}

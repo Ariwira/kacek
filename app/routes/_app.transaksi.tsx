@@ -6,8 +6,9 @@ import {
   useNavigation,
   useRouteLoaderData,
   useSearchParams,
+  Await,
 } from "react-router";
-import { useMemo, useState, useEffect, useRef } from "react";
+import { useMemo, useState, useEffect, useRef, Suspense } from "react";
 import { eq } from "drizzle-orm";
 import { db } from "~/lib/db.server";
 import { categories as categoriesTable } from "~/db/schema";
@@ -37,6 +38,7 @@ import { TransactionForm } from "~/components/transaction-form";
 import { STR } from "~/lib/i18n";
 import { formatIDR, formatRelativeDay } from "~/lib/format";
 import { useToast } from "~/components/toast";
+import { TransactionSkeleton } from "~/components/skeletons";
 
 export async function loader({ request }: Route.LoaderArgs) {
   const userId = await requireUserId(request);
@@ -48,19 +50,15 @@ export async function loader({ request }: Route.LoaderArgs) {
     from: url.searchParams.get("from"),
     to: url.searchParams.get("to"),
   };
-  const [transactions, recurring, stats] = await Promise.all([
-    listTransactions(userId, filters),
-    listRecurringTransactions(userId),
-    getUserStats(userId),
-  ]);
-  
-  // Also get custom categories for filters
-  const userCategories = await db.select().from(categoriesTable).where(eq(categoriesTable.userId, userId));
 
-  const userInitials = (stats.name || stats.email)
-    .substring(0, 2)
-    .toUpperCase();
-  return { transactions, recurring, filters, userInitials, userCategories };
+  // Deferred data for streaming
+  return {
+    filters,
+    transactions: listTransactions(userId, filters),
+    recurring: listRecurringTransactions(userId),
+    stats: getUserStats(userId),
+    userCategories: db.select().from(categoriesTable).where(eq(categoriesTable.userId, userId)),
+  };
 }
 
 const DEFAULT_ACTIVE_CATS: CategoryKey[] = [
@@ -78,8 +76,10 @@ const TYPE_OPTIONS: { value: "all" | "expense" | "income"; label: string }[] = [
 ];
 
 export default function TransaksiPage() {
-  const { transactions, recurring, filters, userInitials, userCategories } =
-    useLoaderData<typeof loader>();
+  const loaderData = useLoaderData<typeof loader>();
+  if (!loaderData) return null;
+  const { transactions, recurring, filters, stats, userCategories } = loaderData;
+
   const root = useRouteLoaderData("root") as { theme: Theme } | undefined;
   const theme: Theme = root?.theme ?? "dark";
   const T = THEMES[theme];
@@ -120,7 +120,6 @@ export default function TransaksiPage() {
   const navigation = useNavigation();
   const wasSubmitting = useRef(false);
 
-  // Auto-close the sheets when the action completes successfully.
   useEffect(() => {
     const isSubmitting =
       navigation.state === "submitting" &&
@@ -134,29 +133,20 @@ export default function TransaksiPage() {
     }
   }, [navigation.state, navigation.formAction]);
 
-  // Group by date label
-  const grouped = useMemo(() => {
-    const map = new Map<string, typeof transactions>();
-    const visibleTx = transactions.filter(
-      (tx) => !hiddenIds.has(String(tx.id)),
-    );
-
-    for (const tx of visibleTx) {
-      const key = formatRelativeDay(tx.date);
-      if (!map.has(key)) map.set(key, []);
-      map.get(key)!.push(tx);
-    }
-    return Array.from(map.entries());
-  }, [transactions, hiddenIds]);
-
-  const visibleRecurring = recurring.filter(
-    (rt) => !hiddenRecurringIds.has(rt.id),
-  );
-
   return (
     <div className="kc-bg-gradient min-h-screen p-4 md:p-6 lg:p-7 pb-24 md:pb-8 lg:pb-7 text-brand-text font-sans">
       <div className="max-w-[1440px] mx-auto relative">
-        <Header theme={theme} T={T} userInitials={userInitials} />
+        <Suspense fallback={<Header theme={theme} T={T} userInitials=".." />}>
+          <Await resolve={stats}>
+            {(resolvedStats) => (
+              <Header 
+                theme={theme} 
+                T={T} 
+                userInitials={(resolvedStats.name || resolvedStats.email).substring(0, 2).toUpperCase()} 
+              />
+            )}
+          </Await>
+        </Suspense>
 
         {/* Page heading */}
         <div className="mb-3.5 mt-1 flex justify-between items-start gap-4">
@@ -164,9 +154,15 @@ export default function TransaksiPage() {
             <h1 className="text-xl md:text-2xl font-bold tracking-tight text-brand-text m-0">
               {STR.txPageTitle}
             </h1>
-            <div className="text-xs text-brand-text-dim mt-1">
-              {STR.txPageSubtitle(transactions.length)}
-            </div>
+            <Suspense fallback={<div className="text-xs text-brand-text-dim mt-1">Memuat...</div>}>
+               <Await resolve={transactions}>
+                  {(resolvedTx) => (
+                    <div className="text-xs text-brand-text-dim mt-1">
+                      {STR.txPageSubtitle(resolvedTx.length)}
+                    </div>
+                  )}
+               </Await>
+            </Suspense>
           </div>
           <div className="flex gap-2">
             <button
@@ -186,136 +182,151 @@ export default function TransaksiPage() {
           </div>
         </div>
 
-        {/* Filter bar */}
-        <FilterBar filters={filters} userCategories={userCategories} theme={theme} />
+        <Suspense fallback={<TransactionSkeleton />}>
+          <Await resolve={Promise.all([transactions, recurring, userCategories])}>
+            {([resolvedTx, resolvedRecurring, resolvedUserCats]) => {
+              // Group by date label
+              const visibleTx = resolvedTx.filter((tx) => !hiddenIds.has(String(tx.id)));
+              const map = new Map<string, typeof resolvedTx>();
+              for (const tx of visibleTx) {
+                const key = formatRelativeDay(tx.date);
+                if (!map.has(key)) map.set(key, []);
+                map.get(key)!.push(tx);
+              }
+              const grouped = Array.from(map.entries());
+              const visibleRecurring = resolvedRecurring.filter((rt) => !hiddenRecurringIds.has(rt.id));
 
-        {/* List */}
-        <GlassCard className="p-[18px] md:p-[22px] lg:p-[26px] mt-3.5">
-          {grouped.length === 0 ? (
-            <div className="text-center py-12 px-4 text-brand-text-mute text-[13px]">
-              {filters.q ||
-              filters.category !== "all" ||
-              filters.type !== "all" ||
-              filters.from ||
-              filters.to
-                ? STR.txEmpty
-                : STR.txEmptyAll}
-            </div>
-          ) : (
-            grouped.map(([dateLabel, txs]) => (
-              <div key={dateLabel} className="mb-4.5">
-                <div className="text-[11px] tracking-wider uppercase text-brand-text-mute font-bold mb-2 pl-1">
-                  {dateLabel}
-                </div>
-                <div className="flex flex-col">
-                  {txs.map((tx, i) => (
-                    <TxRow
-                      key={tx.id}
-                      tx={tx}
-                      last={i === txs.length - 1}
-                      theme={theme}
-                      onClick={() =>
-                        setEditing({
-                          id: String(tx.id),
-                          amount: tx.amount,
-                          type: tx.type,
-                          category: tx.cat,
-                          note: tx.note,
-                          accountId: tx.accountId ?? undefined,
-                          receiptUrl: tx.receiptUrl,
-                          date: new Date(tx.date)
-                            .toISOString()
-                            .slice(0, 10),
-                        })
-                      }
-                    />
-                  ))}
-                </div>
-              </div>
-            ))
-          )}
-        </GlassCard>
+              return (
+                <>
+                  <FilterBar filters={filters} userCategories={resolvedUserCats} theme={theme} />
+                  
+                  <GlassCard className="p-[18px] md:p-[22px] lg:p-[26px] mt-3.5">
+                    {grouped.length === 0 ? (
+                      <div className="text-center py-12 px-4 text-brand-text-mute text-[13px]">
+                        {filters.q ||
+                        filters.category !== "all" ||
+                        filters.type !== "all" ||
+                        filters.from ||
+                        filters.to
+                          ? STR.txEmpty
+                          : STR.txEmptyAll}
+                      </div>
+                    ) : (
+                      grouped.map(([dateLabel, txs]) => (
+                        <div key={dateLabel} className="mb-4.5">
+                          <div className="text-[11px] tracking-wider uppercase text-brand-text-mute font-bold mb-2 pl-1">
+                            {dateLabel}
+                          </div>
+                          <div className="flex flex-col">
+                            {txs.map((tx, i) => (
+                              <TxRow
+                                key={tx.id}
+                                tx={tx}
+                                last={i === txs.length - 1}
+                                theme={theme}
+                                onClick={() =>
+                                  setEditing({
+                                    id: String(tx.id),
+                                    amount: tx.amount,
+                                    type: tx.type,
+                                    category: tx.cat,
+                                    note: tx.note,
+                                    accountId: tx.accountId ?? undefined,
+                                    receiptUrl: tx.receiptUrl,
+                                    date: new Date(tx.date).toISOString().slice(0, 10),
+                                  })
+                                }
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </GlassCard>
 
-        {/* Recurring section */}
-        {visibleRecurring.length > 0 && (
-          <div className="mt-8 mb-4">
-            <h2 className="text-lg font-bold text-brand-text mb-3">
-              Transaksi Rutin
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {visibleRecurring.map((rt) => (
-                <GlassCard key={rt.id} className="p-4 flex items-center gap-3">
-                  <div
-                    className="w-10 h-10 rounded-xl grid place-items-center border shrink-0"
-                    style={{
-                      background: `color-mix(in srgb, ${getCatColor(rt.catColor || rt.category, theme)} 10%, transparent)`,
-                      color: getCatColor(rt.catColor || rt.category, theme),
-                      borderColor: `color-mix(in srgb, ${getCatColor(rt.catColor || rt.category, theme)} 20%, transparent)`,
-                    }}
-                  >
-                    <CatIcon cat={rt.catIcon || rt.category} size={18} />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="text-sm font-bold text-brand-text truncate">
-                      {rt.note || rt.catName || STR.cat[rt.category as CategoryKey]}
+                  {visibleRecurring.length > 0 && (
+                    <div className="mt-8 mb-4">
+                      <h2 className="text-lg font-bold text-brand-text mb-3">
+                        Transaksi Rutin
+                      </h2>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {visibleRecurring.map((rt) => (
+                          <GlassCard key={rt.id} className="p-4 flex items-center gap-3">
+                            <div
+                              className="w-10 h-10 rounded-xl grid place-items-center border shrink-0"
+                              style={{
+                                background: `color-mix(in srgb, ${getCatColor(rt.catColor || rt.category, theme)} 10%, transparent)`,
+                                color: getCatColor(rt.catColor || rt.category, theme),
+                                borderColor: `color-mix(in srgb, ${getCatColor(rt.catColor || rt.category, theme)} 20%, transparent)`,
+                              }}
+                            >
+                              <CatIcon cat={rt.catIcon || rt.category} size={18} />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="text-sm font-bold text-brand-text truncate">
+                                {rt.note || rt.catName || STR.cat[rt.category as CategoryKey]}
+                              </div>
+                              <div className="text-[11px] text-brand-text-mute">
+                                {rt.frequency === "daily"
+                                  ? "Harian"
+                                  : rt.frequency === "weekly"
+                                    ? "Mingguan"
+                                    : rt.frequency === "monthly"
+                                      ? "Bulanan"
+                                      : "Tahunan"}{" "}
+                                · {formatIDR(rt.amount)}
+                              </div>
+                              <div className="text-[10px] text-brand-accent mt-1 font-semibold">
+                                Berikutnya:{" "}
+                                {new Date(rt.nextOccurrence).toLocaleDateString("id-ID", {
+                                  day: "numeric",
+                                  month: "short",
+                                })}
+                              </div>
+                            </div>
+                            <div className="flex gap-1.5 shrink-0">
+                              <button
+                                type="button"
+                                className="w-8 h-8 rounded-lg bg-brand-surface-2 text-brand-text-dim border border-brand-hairline cursor-pointer grid place-items-center transition-all hover:text-brand-text"
+                                onClick={() =>
+                                  setEditingRecurring({
+                                    id: rt.id,
+                                    amount: rt.amount,
+                                    type: rt.type,
+                                    category: rt.category as CategoryKey,
+                                    accountId: rt.accountId!,
+                                    note: rt.note || "",
+                                    frequency: rt.frequency,
+                                  })
+                                }
+                              >
+                                <EditIcon size={14} />
+                              </button>
+                              <button
+                                type="button"
+                                className="w-8 h-8 rounded-lg bg-brand-red-soft text-brand-red border-none cursor-pointer grid place-items-center transition-transform hover:scale-105"
+                                onClick={() =>
+                                  setDeletingRecurring({
+                                    id: rt.id,
+                                    name: rt.note || STR.cat[rt.category as CategoryKey],
+                                  })
+                                }
+                              >
+                                <TrashIcon size={14} />
+                              </button>
+                            </div>
+                          </GlassCard>
+                        ))}
+                      </div>
                     </div>
-                    <div className="text-[11px] text-brand-text-mute">
-                      {rt.frequency === "daily"
-                        ? "Harian"
-                        : rt.frequency === "weekly"
-                          ? "Mingguan"
-                          : rt.frequency === "monthly"
-                            ? "Bulanan"
-                            : "Tahunan"}{" "}
-                      · {formatIDR(rt.amount)}
-                    </div>
-                    <div className="text-[10px] text-brand-accent mt-1 font-semibold">
-                      Berikutnya:{" "}
-                      {new Date(rt.nextOccurrence).toLocaleDateString("id-ID", {
-                        day: "numeric",
-                        month: "short",
-                      })}
-                    </div>
-                  </div>
-                  <div className="flex gap-1.5 shrink-0">
-                    <button
-                      type="button"
-                      className="w-8 h-8 rounded-lg bg-brand-surface-2 text-brand-text-dim border border-brand-hairline cursor-pointer grid place-items-center transition-all hover:text-brand-text"
-                      onClick={() =>
-                        setEditingRecurring({
-                          id: rt.id,
-                          amount: rt.amount,
-                          type: rt.type,
-                          category: rt.category as CategoryKey,
-                          accountId: rt.accountId!,
-                          note: rt.note || "",
-                          frequency: rt.frequency,
-                        })
-                      }
-                    >
-                      <EditIcon size={14} />
-                    </button>
-                    <button
-                      type="button"
-                      className="w-8 h-8 rounded-lg bg-brand-red-soft text-brand-red border-none cursor-pointer grid place-items-center transition-transform hover:scale-105"
-                      onClick={() =>
-                        setDeletingRecurring({
-                          id: rt.id,
-                          name: rt.note || STR.cat[rt.category as CategoryKey],
-                        })
-                      }
-                    >
-                      <TrashIcon size={14} />
-                    </button>
-                  </div>
-                </GlassCard>
-              ))}
-            </div>
-          </div>
-        )}
+                  )}
+                </>
+              );
+            }}
+          </Await>
+        </Suspense>
       </div>
 
-      {/* Edit sheet */}
       <BottomSheet
         open={!!editing}
         onClose={() => setEditing(null)}
@@ -333,7 +344,6 @@ export default function TransaksiPage() {
         )}
       </BottomSheet>
 
-      {/* Recurring Edit sheet */}
       <BottomSheet
         open={!!editingRecurring}
         onClose={() => setEditingRecurring(null)}
@@ -360,7 +370,6 @@ export default function TransaksiPage() {
         )}
       </BottomSheet>
 
-      {/* Add sheet */}
       <BottomSheet
         open={isAdding}
         onClose={() => setIsAdding(false)}
@@ -369,7 +378,6 @@ export default function TransaksiPage() {
         <TransactionForm dark={dark} mode="add" compact onFormSuccess={() => setIsAdding(false)} />
       </BottomSheet>
 
-      {/* Custom Delete Confirmation */}
       <BottomSheet
         open={isDeleting}
         onClose={() => setIsDeleting(false)}
@@ -396,12 +404,10 @@ export default function TransaksiPage() {
                   const txName =
                     editing.note || STR.cat[editing.category as CategoryKey];
 
-                  // 1. Optimistic hide
                   setHiddenIds((prev) => new Set(prev).add(txId));
                   setIsDeleting(false);
                   setEditing(null);
 
-                  // 2. Set delayed action
                   const timer = setTimeout(() => {
                     deleteFetcher.submit(null, {
                       method: "post",
@@ -409,7 +415,6 @@ export default function TransaksiPage() {
                     });
                   }, 5000);
 
-                  // 3. Show toast with Undo
                   showToast(`${txName} dihapus`, {
                     onUndo: () => {
                       clearTimeout(timer);
@@ -430,7 +435,6 @@ export default function TransaksiPage() {
         </div>
       </BottomSheet>
 
-      {/* Custom Recurring Delete Confirmation */}
       <BottomSheet
         open={!!deletingRecurring}
         onClose={() => setDeletingRecurring(null)}
@@ -457,11 +461,9 @@ export default function TransaksiPage() {
                   const rtId = deletingRecurring.id;
                   const rtName = deletingRecurring.name;
 
-                  // 1. Optimistic hide
                   setHiddenRecurringIds((prev) => new Set(prev).add(rtId));
                   setDeletingRecurring(null);
 
-                  // 2. Set delayed action
                   const timer = setTimeout(() => {
                     deleteFetcher.submit(null, {
                       method: "post",
@@ -469,7 +471,6 @@ export default function TransaksiPage() {
                     });
                   }, 5000);
 
-                  // 3. Show toast with Undo
                   showToast(`Jadwal "${rtName}" dihapus`, {
                     onUndo: () => {
                       clearTimeout(timer);
