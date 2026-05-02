@@ -16,18 +16,15 @@ import { STR } from "~/lib/i18n";
 import { useToast } from "~/components/toast";
 
 export async function loader({ request }: Route.LoaderArgs) {
-  const userId = await requireUserId(request);
-
   try {
+    const userId = await requireUserId(request);
+    
     // Process recurring transactions
-    await processRecurringTransactions(userId);
+    await processRecurringTransactions(userId).catch(e => console.error("RT Process Error:", e));
 
     const url = new URL(request.url);
     const range = (url.searchParams.get("range") as "week" | "month" | "year") || "month";
 
-    // We return the promises directly. 
-    // In RR7, if you want streaming, you should return an object with promises.
-    // To ensure it doesn't block, we make sure NOT to await them here.
     return {
       range,
       data: getDashboardData(userId, range).catch(e => {
@@ -66,8 +63,25 @@ export async function loader({ request }: Route.LoaderArgs) {
       }),
     };
   } catch (error) {
-    console.error("Dashboard Loader Error:", error);
-    throw new Response("Internal Server Error", { status: 500 });
+    if (error instanceof Response && (error.status === 302 || error.status === 303)) {
+      throw error;
+    }
+    console.error("Dashboard Global Loader Error:", error);
+    // Fallback to minimal safe data
+    return {
+      range: "month" as const,
+      data: Promise.resolve({
+        summary: { totalExpenses: 0, budget: 0, last7Total: 0, last7Days: [0,0,0,0,0,0,0], expenseDelta: 0, balance: 0, receivedToday: 0, accounts: [], income: 0, incomeDelta: 0, incomeTrend: [] },
+        breakdown: [],
+        totalForRange: 0,
+        expenseDelta: 0,
+        recent: [],
+        totalCount: 0,
+        netThisWeek: 0,
+        accounts: [],
+      }),
+      stats: Promise.resolve({ totalTx: 0, joinedAt: new Date(), name: "", email: "" }),
+    };
   }
 }
 

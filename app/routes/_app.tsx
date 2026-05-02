@@ -17,30 +17,44 @@ import { formatIDR } from "~/lib/format";
 import { useFetcher } from "react-router";
 
 export async function loader({ request }: Route.LoaderArgs) {
-  const userId = await requireUserId(request);
-  
-  // Await only the user to ensure layout basic data is ready
-  const userPromise = db
-    .select({ id: users.id, email: users.email, name: users.name })
-    .from(users)
-    .where(eq(users.id, userId))
-    .then(rows => rows[0] || null);
+  try {
+    const userId = await requireUserId(request);
 
-  return { 
-    user: await userPromise, 
-    accounts: ensureUserAccounts(userId).catch(e => {
-      console.error("Layout Accounts Error:", e);
-      return [];
-    }),
-    notifications: listNotifications(userId).catch(e => {
-      console.error("Layout Notifications Error:", e);
-      return [];
-    }),
-    categories: db.select().from(categoriesTable).where(eq(categoriesTable.userId, userId)).orderBy(desc(categoriesTable.createdAt)).catch(e => {
-      console.error("Layout Categories Error:", e);
-      return [];
-    }),
-  };
+    // Critical data: User profile must be fetched first
+    const user = await db
+      .select({ id: users.id, email: users.email, name: users.name })
+      .from(users)
+      .where(eq(users.id, userId))
+      .then(rows => rows[0] || null)
+      .catch(e => {
+        console.error("Layout User Query Error:", e);
+        return null;
+      });
+
+    return { 
+      user, 
+      accounts: ensureUserAccounts(userId).catch(e => {
+        console.error("Layout Accounts Error:", e);
+        return [];
+      }),
+      notifications: listNotifications(userId).catch(e => {
+        console.error("Layout Notifications Error:", e);
+        return [];
+      }),
+      categories: db.select().from(categoriesTable).where(eq(categoriesTable.userId, userId)).orderBy(desc(categoriesTable.createdAt)).catch(e => {
+        console.error("Layout Categories Error:", e);
+        return [];
+      }),
+    };
+  } catch (error) {
+    // If requireUserId redirects, let it through
+    if (error instanceof Response && (error.status === 302 || error.status === 303)) {
+      throw error;
+    }
+    console.error("Critical Layout Loader Error:", error);
+    // Return empty but safe data instead of crashing
+    return { user: null, accounts: [], notifications: [], categories: [] };
+  }
 }
 
 export default function AppLayout() {
