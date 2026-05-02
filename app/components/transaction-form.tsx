@@ -6,6 +6,8 @@ import {
   PlusIcon,
   PaperclipIcon,
   CUSTOM_ICONS,
+  CameraIcon,
+  ImageIcon,
 } from "~/components/icons";
 import { CheckIcon, TrashIcon, AlertTriangleIcon, ChevronDownIcon } from "~/components/icons-extra";
 import { DatePicker } from "~/components/date-picker";
@@ -146,7 +148,12 @@ function TransactionFormInner(props: {
 
   const [isScanning, setIsScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState(0);
-  const scanInputRef = useRef<HTMLInputElement>(null);
+  const [scanMenuOpen, setScanMenuOpen] = useState(false);
+  const scanCameraRef = useRef<HTMLInputElement>(null);
+  const scanGalleryRef = useRef<HTMLInputElement>(null);
+  const scanBtnRef = useRef<HTMLButtonElement>(null);
+  const scanMenuRef = useRef<HTMLDivElement>(null);
+  const [scanMenuPos, setScanMenuPos] = useState({ top: 0, left: 0 });
 
   const handleScan = async (file: File) => {
     if (!file) return;
@@ -263,7 +270,8 @@ function TransactionFormInner(props: {
     } finally {
       try { await worker?.terminate(); } catch {}
       setIsScanning(false);
-      if (scanInputRef.current) scanInputRef.current.value = "";
+      if (scanCameraRef.current) scanCameraRef.current.value = "";
+      if (scanGalleryRef.current) scanGalleryRef.current.value = "";
     }
   };
 
@@ -391,6 +399,56 @@ function TransactionFormInner(props: {
     return () => document.removeEventListener("keydown", handler);
   }, [catOpen]);
 
+  // Close scan menu on outside click or Escape
+  useEffect(() => {
+    if (!scanMenuOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (scanBtnRef.current?.contains(e.target as Node) ||
+          scanMenuRef.current?.contains(e.target as Node)) return;
+      setScanMenuOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setScanMenuOpen(false); };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [scanMenuOpen]);
+
+  const openScanMenu = () => {
+    if (!scanBtnRef.current) return;
+    const rect = scanBtnRef.current.getBoundingClientRect();
+    setScanMenuPos({ top: rect.bottom + 6, left: rect.left });
+    setScanMenuOpen(true);
+  };
+
+  const scanMenu = scanMenuOpen && createPortal(
+    <div
+      ref={scanMenuRef}
+      className="fixed z-[9999] py-1.5 rounded-xl bg-brand-surface-solid border border-brand-hairline shadow-2xl animate-in fade-in zoom-in-95 duration-150 origin-top-left"
+      style={{ top: scanMenuPos.top, left: scanMenuPos.left, minWidth: 160 }}
+    >
+      <button
+        type="button"
+        onClick={() => { setScanMenuOpen(false); scanCameraRef.current?.click(); }}
+        className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-brand-text hover:bg-brand-surface-2 transition-colors text-left"
+      >
+        <CameraIcon size={15} className="text-brand-accent shrink-0" />
+        <span className="font-semibold">Ambil Foto</span>
+      </button>
+      <button
+        type="button"
+        onClick={() => { setScanMenuOpen(false); scanGalleryRef.current?.click(); }}
+        className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-brand-text hover:bg-brand-surface-2 transition-colors text-left"
+      >
+        <ImageIcon size={15} className="text-brand-accent shrink-0" />
+        <span className="font-semibold">Pilih dari Galeri</span>
+      </button>
+    </div>,
+    portalContainer ?? document.body
+  );
+
   return (
     <>
     <fetcher.Form method="post" action={action} encType="multipart/form-data">
@@ -398,11 +456,14 @@ function TransactionFormInner(props: {
         <div className="flex items-center justify-between mb-4">
           {!isEdit && (
             <div className="flex items-center gap-2">
-              <input type="file" ref={scanInputRef} className="hidden" accept="image/*"
+              <input type="file" ref={scanCameraRef} className="hidden" accept="image/*" capture="environment"
+                onChange={(e) => e.target.files?.[0] && handleScan(e.target.files[0])} />
+              <input type="file" ref={scanGalleryRef} className="hidden" accept="image/*"
                 onChange={(e) => e.target.files?.[0] && handleScan(e.target.files[0])} />
               <button
+                ref={scanBtnRef}
                 type="button"
-                onClick={() => scanInputRef.current?.click()}
+                onClick={openScanMenu}
                 disabled={isScanning}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-brand-accent/30 bg-brand-accent/10 text-brand-accent text-[10px] font-bold uppercase tracking-wider transition-all hover:bg-brand-accent/20 ${
                   isScanning ? "opacity-50 cursor-wait" : "cursor-pointer"
@@ -411,6 +472,7 @@ function TransactionFormInner(props: {
                 <ScanIcon size={12} />
                 {isScanning ? `${scanProgress}%` : "Scan Struk"}
               </button>
+              {scanMenu}
             </div>
           )}
           <TypeToggle defaultValue={defaults?.type ?? "expense"} />
@@ -424,11 +486,14 @@ function TransactionFormInner(props: {
               </div>
               {!isEdit && (
                 <>
-                  <input type="file" ref={scanInputRef} className="hidden" accept="image/*"
+                  <input type="file" ref={scanCameraRef} className="hidden" accept="image/*" capture="environment"
+                    onChange={(e) => e.target.files?.[0] && handleScan(e.target.files[0])} />
+                  <input type="file" ref={scanGalleryRef} className="hidden" accept="image/*"
                     onChange={(e) => e.target.files?.[0] && handleScan(e.target.files[0])} />
                   <button
+                    ref={scanBtnRef}
                     type="button"
-                    onClick={() => scanInputRef.current?.click()}
+                    onClick={openScanMenu}
                     disabled={isScanning}
                     className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-brand-accent/30 bg-brand-accent/10 text-brand-accent text-[10px] font-bold uppercase tracking-wider transition-all hover:bg-brand-accent/20 ${
                       isScanning ? "opacity-50 cursor-wait" : "cursor-pointer"
@@ -437,6 +502,7 @@ function TransactionFormInner(props: {
                     <ScanIcon size={12} />
                     {isScanning ? `Scanning ${scanProgress}%` : "Scan Struk"}
                   </button>
+                  {scanMenu}
                 </>
               )}
             </div>
