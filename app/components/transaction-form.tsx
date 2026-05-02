@@ -178,6 +178,14 @@ function TransactionFormInner(props: {
 
     let worker: Awaited<ReturnType<typeof createWorker>> | null = null;
     try {
+      // Convert file to Data URL to prevent 'file could not be read! code=0' error on some devices
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+
       worker = await createWorker('ind', 1, {
         logger: m => {
           if (m.status === 'recognizing text') {
@@ -186,7 +194,7 @@ function TransactionFormInner(props: {
         }
       });
 
-      const { data: { text } } = await worker.recognize(file);
+      const { data: { text } } = await worker.recognize(dataUrl);
 
       // Amount extraction with tiered priority:
       // Tier 1 — "Grand Total" / "Total Bayar" line (beats subtotal, taxes, etc.)
