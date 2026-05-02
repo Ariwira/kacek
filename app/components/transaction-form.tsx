@@ -5,9 +5,7 @@ import {
   CatIcon,
   PlusIcon,
   PaperclipIcon,
-  ImageIcon,
   CUSTOM_ICONS,
-  CameraIcon,
 } from "~/components/icons";
 import { CheckIcon, TrashIcon, AlertTriangleIcon, ChevronDownIcon } from "~/components/icons-extra";
 import { DatePicker } from "~/components/date-picker";
@@ -148,8 +146,7 @@ function TransactionFormInner(props: {
 
   const [isScanning, setIsScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState(0);
-  const scanCameraRef = useRef<HTMLInputElement>(null); // rear camera
-  const scanGalleryRef = useRef<HTMLInputElement>(null); // gallery picker
+  const scanInputRef = useRef<HTMLInputElement>(null);
 
   const handleScan = async (file: File) => {
     if (!file) return;
@@ -266,9 +263,7 @@ function TransactionFormInner(props: {
     } finally {
       try { await worker?.terminate(); } catch {}
       setIsScanning(false);
-      // Reset both inputs so re-picking the same file re-fires onChange
-      if (scanCameraRef.current) scanCameraRef.current.value = "";
-      if (scanGalleryRef.current) scanGalleryRef.current.value = "";
+      if (scanInputRef.current) scanInputRef.current.value = "";
     }
   };
 
@@ -402,32 +397,20 @@ function TransactionFormInner(props: {
       {compact ? (
         <div className="flex items-center justify-between mb-4">
           {!isEdit && (
-            <div className="flex items-center gap-1.5">
-              {/* Hidden inputs: camera (capture) and gallery (no capture) */}
-              <input type="file" ref={scanCameraRef} className="hidden" accept="image/*" capture="environment"
+            <div className="flex items-center gap-2">
+              <input type="file" ref={scanInputRef} className="hidden" accept="image/*"
                 onChange={(e) => e.target.files?.[0] && handleScan(e.target.files[0])} />
-              <input type="file" ref={scanGalleryRef} className="hidden" accept="image/*"
-                onChange={(e) => e.target.files?.[0] && handleScan(e.target.files[0])} />
-
-              {isScanning ? (
-                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-brand-accent/30 bg-brand-accent/10 text-brand-accent text-[10px] font-bold uppercase tracking-wider opacity-70">
-                  <ScanIcon size={12} />
-                  {scanProgress}%
-                </div>
-              ) : (
-                <>
-                  <button type="button" onClick={() => scanCameraRef.current?.click()}
-                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-brand-accent/30 bg-brand-accent/10 text-brand-accent text-[10px] font-bold uppercase tracking-wider cursor-pointer transition-all hover:bg-brand-accent/20 active:scale-95">
-                    <CameraIcon size={11} />
-                    Kamera
-                  </button>
-                  <button type="button" onClick={() => scanGalleryRef.current?.click()}
-                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-brand-accent/30 bg-brand-accent/10 text-brand-accent text-[10px] font-bold uppercase tracking-wider cursor-pointer transition-all hover:bg-brand-accent/20 active:scale-95">
-                    <ImageIcon size={11} />
-                    Galeri
-                  </button>
-                </>
-              )}
+              <button
+                type="button"
+                onClick={() => scanInputRef.current?.click()}
+                disabled={isScanning}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-brand-accent/30 bg-brand-accent/10 text-brand-accent text-[10px] font-bold uppercase tracking-wider transition-all hover:bg-brand-accent/20 ${
+                  isScanning ? "opacity-50 cursor-wait" : "cursor-pointer"
+                }`}
+              >
+                <ScanIcon size={12} />
+                {isScanning ? `${scanProgress}%` : "Scan Struk"}
+              </button>
             </div>
           )}
           <TypeToggle defaultValue={defaults?.type ?? "expense"} />
@@ -440,32 +423,21 @@ function TransactionFormInner(props: {
                 {isEdit ? "Edit transaksi" : STR.addTransaction}
               </div>
               {!isEdit && (
-                <div className="flex items-center gap-1.5">
-                  <input type="file" ref={scanCameraRef} className="hidden" accept="image/*" capture="environment"
+                <>
+                  <input type="file" ref={scanInputRef} className="hidden" accept="image/*"
                     onChange={(e) => e.target.files?.[0] && handleScan(e.target.files[0])} />
-                  <input type="file" ref={scanGalleryRef} className="hidden" accept="image/*"
-                    onChange={(e) => e.target.files?.[0] && handleScan(e.target.files[0])} />
-
-                  {isScanning ? (
-                    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-brand-accent/30 bg-brand-accent/10 text-brand-accent text-[10px] font-bold uppercase tracking-wider opacity-70">
-                      <ScanIcon size={12} />
-                      Scanning {scanProgress}%
-                    </div>
-                  ) : (
-                    <>
-                      <button type="button" onClick={() => scanCameraRef.current?.click()}
-                        className="flex items-center gap-1 px-2 py-1 rounded-lg border border-brand-accent/30 bg-brand-accent/10 text-brand-accent text-[10px] font-bold uppercase tracking-wider cursor-pointer transition-all hover:bg-brand-accent/20 active:scale-95">
-                        <CameraIcon size={11} />
-                        Kamera
-                      </button>
-                      <button type="button" onClick={() => scanGalleryRef.current?.click()}
-                        className="flex items-center gap-1 px-2 py-1 rounded-lg border border-brand-accent/30 bg-brand-accent/10 text-brand-accent text-[10px] font-bold uppercase tracking-wider cursor-pointer transition-all hover:bg-brand-accent/20 active:scale-95">
-                        <ImageIcon size={11} />
-                        Galeri
-                      </button>
-                    </>
-                  )}
-                </div>
+                  <button
+                    type="button"
+                    onClick={() => scanInputRef.current?.click()}
+                    disabled={isScanning}
+                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-brand-accent/30 bg-brand-accent/10 text-brand-accent text-[10px] font-bold uppercase tracking-wider transition-all hover:bg-brand-accent/20 ${
+                      isScanning ? "opacity-50 cursor-wait" : "cursor-pointer"
+                    }`}
+                  >
+                    <ScanIcon size={12} />
+                    {isScanning ? `Scanning ${scanProgress}%` : "Scan Struk"}
+                  </button>
+                </>
               )}
             </div>
             <TypeToggle defaultValue={defaults?.type ?? "expense"} />
