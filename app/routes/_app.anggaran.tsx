@@ -257,6 +257,22 @@ function BudgetEditForm({
   const fetcher = useFetcher();
   const submitting = fetcher.state !== "idle";
 
+  const [displayAmount, setDisplayAmount] = useState(
+    initial ? new Intl.NumberFormat("id-ID").format(initial) : ""
+  );
+  const [rawAmount, setRawAmount] = useState(initial?.toString() || "");
+
+  const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value.replace(/\D/g, "");
+    setRawAmount(value);
+    if (!value) {
+      setDisplayAmount("");
+      return;
+    }
+    const formatted = new Intl.NumberFormat("id-ID").format(parseInt(value));
+    setDisplayAmount(formatted);
+  };
+
   return (
     <fetcher.Form
       method="post"
@@ -279,15 +295,16 @@ function BudgetEditForm({
           Rp
         </span>
         <input
-          name="amount"
           type="text"
           inputMode="numeric"
           pattern="[0-9]*"
           required
-          defaultValue={initial || ""}
+          value={displayAmount}
+          onChange={handleAmountChange}
           autoFocus
           className="font-mono text-[22px] font-bold text-brand-text bg-transparent border-none outline-none w-full"
         />
+        <input type="hidden" name="amount" value={rawAmount} />
       </div>
       <button
         type="submit"

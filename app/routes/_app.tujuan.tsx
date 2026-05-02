@@ -230,7 +230,7 @@ export default function TujuanPage() {
                           setContributing({ id: g.id, name: g.name })
                         }
                       >
-                        <PlusIcon size={12} /> {STR.goalContribute}
+                        {STR.goalContribute}
                       </button>
                       <button
                         type="button"
@@ -426,6 +426,22 @@ function GoalEditForm({
   const fetcher = useFetcher();
   const submitting = fetcher.state !== "idle";
   const [deadlineDate, setDeadlineDate] = useState(initial.deadline || "");
+  const [displayAmount, setDisplayAmount] = useState(
+    initial.targetAmount ? new Intl.NumberFormat("id-ID").format(initial.targetAmount) : ""
+  );
+  const [rawAmount, setRawAmount] = useState(initial.targetAmount?.toString() || "");
+
+  const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value.replace(/\D/g, "");
+    setRawAmount(value);
+    if (!value) {
+      setDisplayAmount("");
+      return;
+    }
+    const formatted = new Intl.NumberFormat("id-ID").format(parseInt(value));
+    setDisplayAmount(formatted);
+  };
+
   return (
     <fetcher.Form
       method="post"
@@ -462,15 +478,16 @@ function GoalEditForm({
           <div className="flex items-center gap-2 px-4 rounded-xl bg-brand-input border border-brand-hairline h-12 transition-all focus-within:border-brand-accent min-w-0">
             <span className="font-mono text-base text-brand-text-dim font-bold shrink-0">Rp</span>
             <input
-              name="targetAmount"
               type="text"
               inputMode="numeric"
               pattern="[0-9]*"
               required
-              defaultValue={initial.targetAmount || ""}
+              value={displayAmount}
+              onChange={handleAmountChange}
               placeholder="0"
               className="flex-1 min-w-0 h-full p-0 border-none bg-transparent text-brand-text text-base font-bold outline-none font-mono"
             />
+            <input type="hidden" name="targetAmount" value={rawAmount} />
           </div>
           <div className="min-w-0">
             <input
@@ -529,6 +546,20 @@ function ContributeForm({
   const [selectedAccount, setSelectedAccount] = useState<string>(accounts[0]?.id || "");
   const [accOpen, setAccOpen] = useState(false);
   const accTriggerRef = useRef<HTMLButtonElement>(null);
+  
+  const [displayAmount, setDisplayAmount] = useState("");
+  const [rawAmount, setRawAmount] = useState("");
+
+  const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value.replace(/\D/g, "");
+    setRawAmount(value);
+    if (!value) {
+      setDisplayAmount("");
+      return;
+    }
+    const formatted = new Intl.NumberFormat("id-ID").format(parseInt(value));
+    setDisplayAmount(formatted);
+  };
 
   if (accounts.length === 0) {
     return (
@@ -596,15 +627,17 @@ function ContributeForm({
           Rp
         </span>
         <input
-          name="amount"
           type="text"
           inputMode="numeric"
           pattern="[0-9]*"
           required
           autoFocus
+          value={displayAmount}
+          onChange={handleAmountChange}
           placeholder="0"
           className="font-mono text-[22px] font-bold text-brand-text bg-transparent border-none outline-none w-full"
         />
+        <input type="hidden" name="amount" value={rawAmount} />
       </div>
       <button
         type="submit"

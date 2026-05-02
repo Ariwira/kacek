@@ -404,6 +404,20 @@ function TambahDompetForm({
   const triggerRef = useRef<HTMLButtonElement>(null);
   const [pos, setPos] = useState({ top: 0, left: 0, width: 200 });
 
+  const [displayAmount, setDisplayAmount] = useState("");
+  const [rawAmount, setRawAmount] = useState("");
+
+  const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value.replace(/\D/g, "");
+    setRawAmount(value);
+    if (!value) {
+      setDisplayAmount("");
+      return;
+    }
+    const formatted = new Intl.NumberFormat("id-ID").format(parseInt(value));
+    setDisplayAmount(formatted);
+  };
+
   const types = [
     { id: "cash", name: "Uang Tunai (Cash)", icon: WalletIcon },
     { id: "bank", name: "Rekening Bank", icon: BankIcon },
@@ -494,13 +508,15 @@ function TambahDompetForm({
         >
           <span className="font-mono text-xl text-brand-text-dim mr-1.5">Rp</span>
           <input
-            name="initialBalance"
             type="text"
             inputMode="numeric"
             pattern="[0-9]*"
+            value={displayAmount}
+            onChange={handleAmountChange}
             placeholder="0"
             className="font-mono text-2xl font-bold text-brand-text tracking-[-0.5px] bg-transparent border-none outline-none w-full py-2"
           />
+          <input type="hidden" name="initialBalance" value={rawAmount} />
         </div>
       </div>
 
