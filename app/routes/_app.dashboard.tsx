@@ -1,6 +1,4 @@
-import * as RR from "react-router";
 import { useFetcher, useLoaderData, useNavigation, useRouteLoaderData, Await } from "react-router";
-const { defer } = RR;
 import { useState, useEffect, useRef, Suspense } from "react";
 import type { Route } from "./+types/_app.dashboard";
 import { Header } from "~/components/dashboard/header";
@@ -27,15 +25,12 @@ export async function loader({ request }: Route.LoaderArgs) {
     const url = new URL(request.url);
     const range = (url.searchParams.get("range") as "week" | "month" | "year") || "month";
 
-    // Start fetching but don't await yet
-    const dataPromise = getDashboardData(userId, range);
-    const statsPromise = getUserStats(userId);
-
-    return defer({
+    // In React Router 7, simply returning promises in an object enables streaming
+    return {
       range,
-      data: dataPromise,
-      stats: statsPromise,
-    });
+      data: getDashboardData(userId, range),
+      stats: getUserStats(userId),
+    };
   } catch (error) {
     console.error("Dashboard Loader Error:", error);
     throw new Response("Internal Server Error", { status: 500 });
