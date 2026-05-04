@@ -17,6 +17,8 @@ import { ToastProvider } from "~/components/toast";
 import { useEffect, useState } from "react";
 
 export const links: Route.LinksFunction = () => [
+  { rel: "manifest", href: "/manifest.json" },
+  { rel: "apple-touch-icon", href: "/icon.svg" },
   { rel: "preconnect", href: "https://fonts.googleapis.com" },
   {
     rel: "preconnect",
@@ -36,6 +38,9 @@ export const meta: Route.MetaFunction = () => [
     content:
       "KaCek adalah expense tracker premium dengan glassmorphism, light/dark mode, dan analitik kategori.",
   },
+  { name: "theme-color", content: "#06180F" },
+  { name: "apple-mobile-web-app-capable", content: "yes" },
+  { name: "apple-mobile-web-app-status-bar-style", content: "black-translucent" },
 ];
 
 export async function loader({ request }: Route.LoaderArgs) {
@@ -96,6 +101,17 @@ export function Layout({ children }: { children: React.ReactNode }) {
           <GlobalLoading />
           {children}
           <ScrollRestoration />
+          <script
+            dangerouslySetInnerHTML={{
+              __html: `
+                if ('serviceWorker' in navigator) {
+                  window.addEventListener('load', () => {
+                    navigator.serviceWorker.register('/sw.js').catch(err => console.log('SW registration failed: ', err));
+                  });
+                }
+              `,
+            }}
+          />
           <Scripts />
         </ToastProvider>
       </body>
