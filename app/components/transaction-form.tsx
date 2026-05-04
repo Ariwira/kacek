@@ -176,45 +176,53 @@ function TransactionFormInner(props: {
 
     let worker: Awaited<ReturnType<typeof createWorker>> | null = null;
     try {
+      // Read file safely using FileReader first
+      const rawDataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = () => reject(new Error("Gagal membaca file gambar"));
+        reader.readAsDataURL(file);
+      });
+
       // Compress and resize image using Canvas for better OCR accuracy and speed
-      const dataUrl = await new Promise<string>((resolve, reject) => {
+      const dataUrl = await new Promise<string>((resolve) => {
         const img = new Image();
         img.onload = () => {
-          const canvas = document.createElement("canvas");
-          let { width, height } = img;
-          const MAX_DIM = 1200; // Optimal for OCR speed and accuracy
+          try {
+            const canvas = document.createElement("canvas");
+            let { width, height } = img;
+            const MAX_DIM = 1200; // Optimal for OCR speed and accuracy
 
-          if (width > height && width > MAX_DIM) {
-            height = Math.round(height * (MAX_DIM / width));
-            width = MAX_DIM;
-          } else if (height > MAX_DIM) {
-            width = Math.round(width * (MAX_DIM / height));
-            height = MAX_DIM;
-          }
+            if (width > height && width > MAX_DIM) {
+              height = Math.round(height * (MAX_DIM / width));
+              width = MAX_DIM;
+            } else if (height > MAX_DIM) {
+              width = Math.round(width * (MAX_DIM / height));
+              height = MAX_DIM;
+            }
 
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext("2d");
-          if (!ctx) {
-            const reader = new FileReader();
-            reader.onload = () => resolve(reader.result as string);
-            reader.onerror = reject;
-            reader.readAsDataURL(file);
-            return;
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext("2d");
+            if (!ctx) {
+              resolve(rawDataUrl);
+              return;
+            }
+            
+            // Draw and apply simple grayscale & high contrast filter for better OCR text recognition
+            ctx.filter = 'grayscale(100%) contrast(1.2)';
+            ctx.drawImage(img, 0, 0, width, height);
+            resolve(canvas.toDataURL("image/jpeg", 0.7));
+          } catch (e) {
+            console.error("Canvas error:", e);
+            resolve(rawDataUrl); // Fallback to raw if canvas fails
           }
-          
-          // Draw and apply simple grayscale & high contrast filter for better OCR text recognition
-          ctx.filter = 'grayscale(100%) contrast(1.2)';
-          ctx.drawImage(img, 0, 0, width, height);
-          resolve(canvas.toDataURL("image/jpeg", 0.7));
         };
         img.onerror = () => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result as string);
-          reader.onerror = reject;
-          reader.readAsDataURL(file);
+          console.error("Image load error for canvas");
+          resolve(rawDataUrl); // Fallback to raw
         };
-        img.src = URL.createObjectURL(file);
+        img.src = rawDataUrl;
       });
 
       worker = await createWorker('ind', 1, {
