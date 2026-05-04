@@ -176,15 +176,55 @@ function TransactionFormInner(props: {
 
     let worker: Awaited<ReturnType<typeof createWorker>> | null = null;
     try {
-      const dataUrl = await new Promise<string>((resolve, reject) => {
+      const dataUrl = await new Promise<string>(async (resolve, reject) => {
+        const MAX_DIM = 1000;
+        
+        // Helper to fallback to raw file if all compressions fail
+        const fallbackToRaw = () => {
+          console.warn("Falling back to raw image data. Processing may be slow or fail.");
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = () => reject(new Error("Gagal membaca file asli"));
+          reader.readAsDataURL(file);
+        };
+
+        // 1. Try createImageBitmap (Best for massive 50MP camera photos)
+        try {
+          if (typeof window.createImageBitmap === 'function') {
+            const bmp = await window.createImageBitmap(file);
+            const canvas = document.createElement("canvas");
+            let width = bmp.width;
+            let height = bmp.height;
+            
+            if (width > height && width > MAX_DIM) {
+              height = Math.round(height * (MAX_DIM / width));
+              width = MAX_DIM;
+            } else if (height > MAX_DIM) {
+              width = Math.round(width * (MAX_DIM / height));
+              height = MAX_DIM;
+            }
+            
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext("2d", { willReadFrequently: true });
+            if (ctx) {
+              ctx.drawImage(bmp, 0, 0, width, height);
+              resolve(canvas.toDataURL("image/jpeg", 0.6));
+              return;
+            }
+          }
+        } catch (e) {
+          console.warn("createImageBitmap failed", e);
+        }
+
+        // 2. Fallback to standard Image object
         const blobUrl = URL.createObjectURL(file);
         const img = new Image();
         
-        const processCanvas = (imageElement: HTMLImageElement) => {
+        const processCanvas = () => {
           try {
             const canvas = document.createElement("canvas");
-            let { width, height } = imageElement;
-            const MAX_DIM = 1000; // Optimal memory-safe dimension
+            let { width, height } = img;
 
             if (width > height && width > MAX_DIM) {
               height = Math.round(height * (MAX_DIM / width));
@@ -197,39 +237,26 @@ function TransactionFormInner(props: {
             canvas.width = width;
             canvas.height = height;
             
-            // willReadFrequently can help with memory on some mobile GPUs
             const ctx = canvas.getContext("2d", { willReadFrequently: true });
             if (!ctx) throw new Error("Gagal membuat konteks canvas");
             
-            ctx.drawImage(imageElement, 0, 0, width, height);
-            const compressedUrl = canvas.toDataURL("image/jpeg", 0.6);
-            
-            resolve(compressedUrl);
+            ctx.drawImage(img, 0, 0, width, height);
+            resolve(canvas.toDataURL("image/jpeg", 0.6));
           } catch (e) {
             console.error("Canvas error:", e);
-            reject(new Error("Memori tidak cukup untuk memproses gambar ini"));
+            fallbackToRaw();
           }
         };
 
         img.onload = () => {
-          processCanvas(img);
+          processCanvas();
           URL.revokeObjectURL(blobUrl);
         };
         
         img.onerror = () => {
-          console.error("Blob URL load failed, falling back to FileReader");
+          console.error("Blob URL load failed. Image might be too large for GPU.");
           URL.revokeObjectURL(blobUrl);
-          
-          // Fallback if Blob URL fails (e.g. CSP restrictions)
-          const reader = new FileReader();
-          reader.onload = () => {
-            const fallbackImg = new Image();
-            fallbackImg.onload = () => processCanvas(fallbackImg);
-            fallbackImg.onerror = () => reject(new Error("Format gambar tidak didukung atau file rusak"));
-            fallbackImg.src = reader.result as string;
-          };
-          reader.onerror = () => reject(new Error("Gagal membaca file dari sistem"));
-          reader.readAsDataURL(file);
+          fallbackToRaw();
         };
         
         img.src = blobUrl;
