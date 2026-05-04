@@ -179,7 +179,6 @@ function TransactionFormInner(props: {
       const dataUrl = await new Promise<string>(async (resolve, reject) => {
         const MAX_DIM = 1000;
         
-        // Helper to fallback to raw file if all compressions fail
         const fallbackToRaw = () => {
           console.warn("Falling back to raw image data. Processing may be slow or fail.");
           const reader = new FileReader();
@@ -188,13 +187,11 @@ function TransactionFormInner(props: {
           reader.readAsDataURL(file);
         };
 
-        // 1. Try createImageBitmap (Best for massive 50MP camera photos)
-        try {
-          if (typeof window.createImageBitmap === 'function') {
-            const bmp = await window.createImageBitmap(file);
+        const processBitmapOrImage = (source: ImageBitmap | HTMLImageElement) => {
+          try {
             const canvas = document.createElement("canvas");
-            let width = bmp.width;
-            let height = bmp.height;
+            let width = source.width;
+            let height = source.height;
             
             if (width > height && width > MAX_DIM) {
               height = Math.round(height * (MAX_DIM / width));
@@ -207,9 +204,45 @@ function TransactionFormInner(props: {
             canvas.width = width;
             canvas.height = height;
             const ctx = canvas.getContext("2d", { willReadFrequently: true });
-            if (ctx) {
-              ctx.drawImage(bmp, 0, 0, width, height);
-              resolve(canvas.toDataURL("image/jpeg", 0.6));
+            if (!ctx) return null;
+            
+            ctx.drawImage(source, 0, 0, width, height);
+            
+            // Safely apply grayscale and high contrast without GPU filter bugs
+            const imgData = ctx.getImageData(0, 0, width, height);
+            const data = imgData.data;
+            for (let i = 0; i < data.length; i += 4) {
+               const gray = data[i] * 0.299 + data[i+1] * 0.587 + data[i+2] * 0.114;
+               const contrast = 1.5;
+               const intercept = 128 * (1 - contrast);
+               const final = Math.min(255, Math.max(0, gray * contrast + intercept));
+               
+               data[i] = data[i+1] = data[i+2] = final;
+            }
+            ctx.putImageData(imgData, 0, 0);
+            
+            // Use 0.92 for much clearer text without blur artifacts
+            const compressedUrl = canvas.toDataURL("image/jpeg", 0.92);
+            
+            // Immediately free canvas memory
+            canvas.width = 0;
+            canvas.height = 0;
+            
+            return compressedUrl;
+          } catch (e) {
+            console.error("Canvas processing failed", e);
+            return null;
+          }
+        };
+
+        // 1. Try createImageBitmap (Best for massive 50MP camera photos)
+        try {
+          if (typeof window.createImageBitmap === 'function') {
+            const bmp = await window.createImageBitmap(file);
+            const result = processBitmapOrImage(bmp);
+            bmp.close(); // Free the massive memory immediately
+            if (result) {
+              resolve(result);
               return;
             }
           }
@@ -221,36 +254,11 @@ function TransactionFormInner(props: {
         const blobUrl = URL.createObjectURL(file);
         const img = new Image();
         
-        const processCanvas = () => {
-          try {
-            const canvas = document.createElement("canvas");
-            let { width, height } = img;
-
-            if (width > height && width > MAX_DIM) {
-              height = Math.round(height * (MAX_DIM / width));
-              width = MAX_DIM;
-            } else if (height > MAX_DIM) {
-              width = Math.round(width * (MAX_DIM / height));
-              height = MAX_DIM;
-            }
-
-            canvas.width = width;
-            canvas.height = height;
-            
-            const ctx = canvas.getContext("2d", { willReadFrequently: true });
-            if (!ctx) throw new Error("Gagal membuat konteks canvas");
-            
-            ctx.drawImage(img, 0, 0, width, height);
-            resolve(canvas.toDataURL("image/jpeg", 0.6));
-          } catch (e) {
-            console.error("Canvas error:", e);
-            fallbackToRaw();
-          }
-        };
-
         img.onload = () => {
-          processCanvas();
+          const result = processBitmapOrImage(img);
           URL.revokeObjectURL(blobUrl);
+          if (result) resolve(result);
+          else fallbackToRaw();
         };
         
         img.onerror = () => {
@@ -572,9 +580,15 @@ function TransactionFormInner(props: {
           {!isEdit && (
             <div className="flex items-center gap-2">
               <input type="file" ref={scanCameraRef} className="hidden" accept="image/jpeg, image/png, image/webp" capture="environment"
-                onChange={(e) => e.target.files?.[0] && handleScan(e.target.files[0])} />
+                onChange={(e) => {
+                  if (e.target.files?.[0]) handleScan(e.target.files[0]);
+                  e.target.value = '';
+                }} />
               <input type="file" ref={scanGalleryRef} className="hidden" accept="image/jpeg, image/png, image/webp"
-                onChange={(e) => e.target.files?.[0] && handleScan(e.target.files[0])} />
+                onChange={(e) => {
+                  if (e.target.files?.[0]) handleScan(e.target.files[0]);
+                  e.target.value = '';
+                }} />
               <button
                 ref={scanBtnRef}
                 type="button"
@@ -602,9 +616,15 @@ function TransactionFormInner(props: {
               {!isEdit && (
                 <>
                   <input type="file" ref={scanCameraRef} className="hidden" accept="image/jpeg, image/png, image/webp" capture="environment"
-                    onChange={(e) => e.target.files?.[0] && handleScan(e.target.files[0])} />
+                    onChange={(e) => {
+                      if (e.target.files?.[0]) handleScan(e.target.files[0]);
+                      e.target.value = '';
+                    }} />
                   <input type="file" ref={scanGalleryRef} className="hidden" accept="image/jpeg, image/png, image/webp"
-                    onChange={(e) => e.target.files?.[0] && handleScan(e.target.files[0])} />
+                    onChange={(e) => {
+                      if (e.target.files?.[0]) handleScan(e.target.files[0]);
+                      e.target.value = '';
+                    }} />
                   <button
                     ref={scanBtnRef}
                     type="button"
