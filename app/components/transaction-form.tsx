@@ -176,22 +176,17 @@ function TransactionFormInner(props: {
 
     let worker: Awaited<ReturnType<typeof createWorker>> | null = null;
     try {
-      // Read file safely using FileReader first
-      const rawDataUrl = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = () => reject(new Error("Gagal membaca file gambar"));
-        reader.readAsDataURL(file);
-      });
-
       // Compress and resize image using Canvas for better OCR accuracy and speed
-      const dataUrl = await new Promise<string>((resolve) => {
+      // We use URL.createObjectURL which is highly memory-efficient compared to FileReader
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const blobUrl = URL.createObjectURL(file);
         const img = new Image();
+        
         img.onload = () => {
           try {
             const canvas = document.createElement("canvas");
             let { width, height } = img;
-            const MAX_DIM = 1000; // Reduced for better memory safety on all devices
+            const MAX_DIM = 1000; // Optimal memory-safe dimension
 
             if (width > height && width > MAX_DIM) {
               height = Math.round(height * (MAX_DIM / width));
@@ -203,25 +198,30 @@ function TransactionFormInner(props: {
 
             canvas.width = width;
             canvas.height = height;
-            const ctx = canvas.getContext("2d");
-            if (!ctx) {
-              resolve(rawDataUrl);
-              return;
-            }
             
-            // Draw image without filter to save memory and prevent crash on large photos
+            // willReadFrequently can help with memory on some mobile GPUs
+            const ctx = canvas.getContext("2d", { willReadFrequently: true });
+            if (!ctx) throw new Error("Gagal membuat konteks canvas");
+            
             ctx.drawImage(img, 0, 0, width, height);
-            resolve(canvas.toDataURL("image/jpeg", 0.6));
+            const compressedUrl = canvas.toDataURL("image/jpeg", 0.6);
+            
+            URL.revokeObjectURL(blobUrl);
+            resolve(compressedUrl);
           } catch (e) {
             console.error("Canvas error:", e);
-            resolve(rawDataUrl); // Fallback to raw if canvas fails
+            URL.revokeObjectURL(blobUrl);
+            reject(new Error("Memori tidak cukup untuk memproses gambar ini"));
           }
         };
+        
         img.onerror = () => {
           console.error("Image load error for canvas");
-          resolve(rawDataUrl); // Fallback to raw
+          URL.revokeObjectURL(blobUrl);
+          reject(new Error("Format gambar tidak didukung atau file rusak"));
         };
-        img.src = rawDataUrl;
+        
+        img.src = blobUrl;
       });
 
       worker = await createWorker('ind', 1, {
