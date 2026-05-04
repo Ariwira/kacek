@@ -350,43 +350,47 @@ function TransactionFormInner(props: {
         }
       }
 
-      let finalAmount = grandTotalAmount || totalAmount || foundAmount;
+      // Anti-Column-Split Heuristic via Mathematical Proof (A + B = C)
+      // Receipts are mathematical. If an amount is a true Total or Cash, it is the sum of other items.
+      let verifiedTotal = 0;
+      const mathSums: { total: number, comp1: number, comp2: number }[] = [];
+      const amountArr = Array.from(allAmounts).sort((a, b) => b - a); // descending
       
-      // Anti-Column-Split Heuristic:
-      // If the keyword matched a smaller number (like Subtotal), but there is a larger number
-      // on the receipt, the larger number is almost certainly the real Total.
-      // Exception: The larger number is the Cash given by the customer.
-      if (maxAmount > finalAmount) {
-         // Cash is almost always a round number (multiples of 10.000).
-         const isCash = maxAmount % 10000 === 0;
+      for (let i = 0; i < amountArr.length; i++) {
+        for (let j = i; j < amountArr.length; j++) {
+          const sum = amountArr[i] + amountArr[j];
+          if (allAmounts.has(sum)) {
+            mathSums.push({ total: sum, comp1: amountArr[i], comp2: amountArr[j] }); // comp1 <= comp2 since amountArr is descending
+          }
+        }
+      }
+
+      for (const sumObj of mathSums) {
+         // Check if this sum is Cash (Cash = Total + Change)
+         const isRound = sumObj.total % 10000 === 0;
+         const ratio = sumObj.comp1 / sumObj.comp2;
+         const isTax = [0.02, 0.05, 0.10, 0.11, 0.12, 0.21].some(tax => Math.abs(ratio - tax) < 0.005);
          
-         // Let's check mathematically if maxAmount = Cash = Total(B) + Change(A)
-         let isMathCash = false;
-         let mathTotal = 0;
-         const amountArr = Array.from(allAmounts).sort((a, b) => b - a); // Descending
-         
-         for (let i = 1; i < amountArr.length; i++) {
-            const B = amountArr[i];
-            const A = maxAmount - B;
-            if (allAmounts.has(A)) {
-               // A + B = maxAmount exists on the receipt!
-               // Check if A is just a tax percentage of B (e.g., 10%, 11%, 2%)
-               const ratio = A / B;
-               const isTax = [0.02, 0.05, 0.10, 0.11, 0.12, 0.21].some(tax => Math.abs(ratio - tax) < 0.005);
-               if (!isTax) {
-                  // Not a tax, so maxAmount is Cash, and B is the real Total!
-                  isMathCash = true;
-                  mathTotal = B;
-               }
-               break;
-            }
+         if (isRound && !isTax) {
+            // sumObj.total is Cash. sumObj.comp2 is the mathematically proven Real Total.
+            if (sumObj.comp2 > verifiedTotal) verifiedTotal = sumObj.comp2;
+         } else {
+            // sumObj.total is the proven Real Total (e.g. Subtotal + Tax, or Item1 + Item2)
+            if (sumObj.total > verifiedTotal) verifiedTotal = sumObj.total;
          }
-         
-         if (isMathCash) {
-             finalAmount = mathTotal;
-         } else if (!isCash) {
-             // If it's not a round cash number and no math proofs, it's definitely the Grand Total.
-             finalAmount = maxAmount;
+      }
+
+      // Priority:
+      // 1. Math.max of proven sums and keyword matches (ignores fake OCR artifacts like 845.000)
+      // 2. If nothing is found, fallback to maxAmount
+      let finalAmount = Math.max(verifiedTotal, grandTotalAmount, totalAmount);
+      
+      if (finalAmount === 0 && maxAmount > 0) {
+         if (maxAmount % 10000 === 0 && amountArr.length > 1) {
+            // Guess that absolute max is cash, use second largest
+            finalAmount = amountArr[1];
+         } else {
+            finalAmount = maxAmount;
          }
       }
 
