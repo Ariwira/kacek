@@ -222,20 +222,8 @@ function TransactionFormInner(props: {
             
             ctx.drawImage(source, 0, 0, width, height);
             
-            // Safely apply grayscale and high contrast without GPU filter bugs
-            const imgData = ctx.getImageData(0, 0, width, height);
-            const data = imgData.data;
-            for (let i = 0; i < data.length; i += 4) {
-               const gray = data[i] * 0.299 + data[i+1] * 0.587 + data[i+2] * 0.114;
-               const contrast = 1.5;
-               const intercept = 128 * (1 - contrast);
-               const final = Math.min(255, Math.max(0, gray * contrast + intercept));
-               
-               data[i] = data[i+1] = data[i+2] = final;
-            }
-            ctx.putImageData(imgData, 0, 0);
-            
-            // Use 0.92 for much clearer text without blur artifacts
+            // Use 0.92 for much clearer text without blur artifacts.
+            // Removed manual contrast filter because it deforms text on faintly printed receipts.
             const compressedUrl = canvas.toDataURL("image/jpeg", 0.92);
             
             // Immediately free canvas memory
@@ -292,10 +280,10 @@ function TransactionFormInner(props: {
         }
       });
 
-      // PSM 4: Assume a single column of text of variable sizes. 
-      // This is crucial for receipts to prevent "Total" and "81.600" from splitting into separate columns.
+      // PSM 6: Assume a single uniform block of text.
+      // This forces Tesseract to read horizontally, preventing it from splitting Left/Right columns.
       await worker.setParameters({
-        tessedit_pageseg_mode: PSM.SINGLE_COLUMN,
+        tessedit_pageseg_mode: PSM.SINGLE_BLOCK,
       });
 
       const { data: { text } } = await worker.recognize(dataUrl);
