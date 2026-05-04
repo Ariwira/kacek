@@ -587,13 +587,17 @@ function TransactionFormInner(props: {
             <div className="flex items-center gap-2">
               <input type="file" ref={scanCameraRef} className="hidden" accept="image/jpeg, image/png, image/webp" capture="environment"
                 onChange={(e) => {
-                  if (e.target.files?.[0]) handleScan(e.target.files[0]);
-                  e.target.value = '';
+                  const input = e.target;
+                  if (input.files?.[0]) {
+                    handleScan(input.files[0]).finally(() => { input.value = ''; });
+                  }
                 }} />
               <input type="file" ref={scanGalleryRef} className="hidden" accept="image/jpeg, image/png, image/webp"
                 onChange={(e) => {
-                  if (e.target.files?.[0]) handleScan(e.target.files[0]);
-                  e.target.value = '';
+                  const input = e.target;
+                  if (input.files?.[0]) {
+                    handleScan(input.files[0]).finally(() => { input.value = ''; });
+                  }
                 }} />
               <button
                 ref={scanBtnRef}
@@ -623,13 +627,17 @@ function TransactionFormInner(props: {
                 <>
                   <input type="file" ref={scanCameraRef} className="hidden" accept="image/jpeg, image/png, image/webp" capture="environment"
                     onChange={(e) => {
-                      if (e.target.files?.[0]) handleScan(e.target.files[0]);
-                      e.target.value = '';
+                      const input = e.target;
+                      if (input.files?.[0]) {
+                        handleScan(input.files[0]).finally(() => { input.value = ''; });
+                      }
                     }} />
                   <input type="file" ref={scanGalleryRef} className="hidden" accept="image/jpeg, image/png, image/webp"
                     onChange={(e) => {
-                      if (e.target.files?.[0]) handleScan(e.target.files[0]);
-                      e.target.value = '';
+                      const input = e.target;
+                      if (input.files?.[0]) {
+                        handleScan(input.files[0]).finally(() => { input.value = ''; });
+                      }
                     }} />
                   <button
                     ref={scanBtnRef}

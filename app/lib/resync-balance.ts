@@ -1,6 +1,6 @@
 import { db } from "./db.server";
 import { accounts, transactions } from "../db/schema";
-import { eq, and, isNull } from "drizzle-orm";
+import { eq, and, isNull, sql } from "drizzle-orm";
 
 async function resync() {
   console.log("Resyncing account balances...");
