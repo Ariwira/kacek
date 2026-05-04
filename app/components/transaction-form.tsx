@@ -138,7 +138,21 @@ function TransactionFormInner(props: {
   const [catOpen, setCatOpen] = useState(false);
   const [accOpen, setAccOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState(todayISO);
+  const [txType, setTxType] = useState<"expense" | "income">(defaults?.type ?? "expense");
   const [isRecurring, setIsRecurring] = useState(false);
+  
+  const filteredCategoryOptions = CATEGORY_OPTIONS.filter(c => txType === "expense" ? c !== "income" : c === "income");
+
+  useEffect(() => {
+    // If the currently selected built-in category is not in the filtered options
+    // and it's also not a custom category, reset it to the first available option.
+    if (
+      !filteredCategoryOptions.includes(selectedCat as CategoryKey) &&
+      !customCategories.some((c) => c.id === selectedCat)
+    ) {
+      setSelectedCat(filteredCategoryOptions[0]);
+    }
+  }, [txType, selectedCat, filteredCategoryOptions, customCategories]);
   
   const accTriggerRef = useRef<HTMLButtonElement>(null);
   const accDropdownRef = useRef<HTMLDivElement>(null);
@@ -614,7 +628,7 @@ function TransactionFormInner(props: {
               {scanMenu}
             </div>
           )}
-          <TypeToggle defaultValue={defaults?.type ?? "expense"} />
+          <TypeToggle value={txType} onChange={setTxType} />
         </div>
       ) : (
         <>
@@ -655,7 +669,7 @@ function TransactionFormInner(props: {
                 </>
               )}
             </div>
-            <TypeToggle defaultValue={defaults?.type ?? "expense"} />
+            <TypeToggle value={txType} onChange={setTxType} />
           </div>
           <div className="text-xs text-brand-text-dim mb-4.5">
             {isScanning ? "Menganalisis teks pada struk belanja Anda..." : STR.addTransactionTagline}
@@ -833,7 +847,7 @@ function TransactionFormInner(props: {
               }}
             >
               <div className="px-3 py-1.5 text-[10px] font-bold text-brand-text-mute uppercase tracking-wider">Bawaan</div>
-              {CATEGORY_OPTIONS.map((c) => (
+              {filteredCategoryOptions.map((c) => (
                 <button
                   key={c}
                   type="button"
@@ -1110,9 +1124,11 @@ function TransactionFormInner(props: {
 }
 
 function TypeToggle({
-  defaultValue,
+  value,
+  onChange,
 }: {
-  defaultValue: "expense" | "income";
+  value: "expense" | "income";
+  onChange: (v: "expense" | "income") => void;
 }) {
   return (
     <div className="flex gap-1 p-0.75 rounded-full bg-brand-surface-2 border border-brand-hairline text-[11px] font-bold">
@@ -1121,7 +1137,8 @@ function TypeToggle({
           type="radio"
           name="type"
           value="expense"
-          defaultChecked={defaultValue === "expense"}
+          checked={value === "expense"}
+          onChange={() => onChange("expense")}
           className="peer hidden"
         />
         <div className="px-2.5 py-1 rounded-full text-brand-text-dim transition-all peer-checked:bg-brand-red-soft peer-checked:text-brand-red">
@@ -1133,7 +1150,8 @@ function TypeToggle({
           type="radio"
           name="type"
           value="income"
-          defaultChecked={defaultValue === "income"}
+          checked={value === "income"}
+          onChange={() => onChange("income")}
           className="peer hidden"
         />
         <div className="px-2.5 py-1 rounded-full text-brand-text-dim transition-all peer-checked:bg-brand-accent-soft peer-checked:text-brand-accent">
