@@ -18,7 +18,7 @@ import { useEffect, useState } from "react";
 
 export const links: Route.LinksFunction = () => [
   { rel: "manifest", href: "/manifest.json" },
-  { rel: "apple-touch-icon", href: "/icon.svg" },
+  { rel: "apple-touch-icon", href: "/icon-512.png" },
   { rel: "preconnect", href: "https://fonts.googleapis.com" },
   {
     rel: "preconnect",
