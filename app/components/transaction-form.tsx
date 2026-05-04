@@ -191,7 +191,7 @@ function TransactionFormInner(props: {
           try {
             const canvas = document.createElement("canvas");
             let { width, height } = img;
-            const MAX_DIM = 1200; // Optimal for OCR speed and accuracy
+            const MAX_DIM = 1000; // Reduced for better memory safety on all devices
 
             if (width > height && width > MAX_DIM) {
               height = Math.round(height * (MAX_DIM / width));
@@ -211,7 +211,7 @@ function TransactionFormInner(props: {
             
             // Draw image without filter to save memory and prevent crash on large photos
             ctx.drawImage(img, 0, 0, width, height);
-            resolve(canvas.toDataURL("image/jpeg", 0.7));
+            resolve(canvas.toDataURL("image/jpeg", 0.6));
           } catch (e) {
             console.error("Canvas error:", e);
             resolve(rawDataUrl); // Fallback to raw if canvas fails
@@ -244,12 +244,11 @@ function TransactionFormInner(props: {
       let grandTotalAmount = 0;  // tier 1: "grand" or explicit grand total line
 
       const parseAmount = (str: string): number => {
-        // Find largest number sequence in the string, ignoring dots/commas/spaces
-        const numbers = str.match(/\d[0-9., ]*\d/g);
+        // Find largest number sequence, allowing dots/spaces as thousands separators
+        const numbers = str.match(/\d{1,3}(?:[., ]\d{3})+|\d{4,}/g);
         if (!numbers) return 0;
         let max = 0;
         for (const num of numbers) {
-          if (/[0-9]{2,4}[/-][0-9]{1,2}[/-][0-9]{1,4}/.test(num)) continue; // skip dates
           const clean = num.replace(/[,. ]/g, "");
           const val = parseInt(clean);
           if (!isNaN(val) && val >= 1000 && val < 50_000_000 && val > max) {
@@ -259,23 +258,36 @@ function TransactionFormInner(props: {
         return max;
       };
 
+      let lastLineWasTotal = false;
+      let lastLineWasGrand = false;
+
       for (const line of lines) {
         const cleanLine = line.replace(/[|[\]]/g, "").trim();
         if (!cleanLine) continue;
-
-        const val = parseAmount(cleanLine);
-        if (!val) continue;
-
-        if (val > foundAmount) foundAmount = val;
 
         const isGrand = /grand\s*total|total\s*bayar|grand\s*bill|total\s*bill/i.test(cleanLine);
         const isTotal = /total|jumlah|bayar|tagihan|net|summary/i.test(cleanLine);
         const isSubtotal = /sub\s*total|subtotal/i.test(cleanLine);
 
-        if (isGrand && val > grandTotalAmount) {
-          grandTotalAmount = val;
-        } else if (isTotal && !isSubtotal && val > totalAmount) {
-          totalAmount = val;
+        const val = parseAmount(cleanLine);
+
+        if (val) {
+          if (val > foundAmount) foundAmount = val;
+
+          if ((isGrand || lastLineWasGrand) && val > grandTotalAmount) {
+            grandTotalAmount = val;
+          } else if ((isTotal || lastLineWasTotal) && !isSubtotal && val > totalAmount) {
+            totalAmount = val;
+          }
+        }
+
+        // Carry forward the keyword if no value was found on this line
+        if (!val) {
+          if (isGrand) lastLineWasGrand = true;
+          else if (isTotal && !isSubtotal) lastLineWasTotal = true;
+        } else {
+          lastLineWasGrand = false;
+          lastLineWasTotal = false;
         }
       }
 
