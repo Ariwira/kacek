@@ -161,11 +161,9 @@ function TransactionFormInner(props: {
   const handleScan = async (file: File) => {
     if (!file) return;
 
-    // Phone cameras can produce 8–15MB photos; tesseract WASM struggles past ~10MB
-    // on mobile and silently OOMs. Guard early with a friendly message.
-    const MAX_BYTES = 8 * 1024 * 1024;
+    const MAX_BYTES = 15 * 1024 * 1024; // Allow up to 15MB for phone cameras
     if (file.size > MAX_BYTES) {
-      showToast("Foto terlalu besar (maks 8MB). Coba kompres dulu.", { type: "error" });
+      showToast("Foto terlalu besar (maks 15MB). Coba kompres dulu.", { type: "error" });
       return;
     }
     if (!file.type.startsWith("image/")) {
@@ -178,12 +176,45 @@ function TransactionFormInner(props: {
 
     let worker: Awaited<ReturnType<typeof createWorker>> | null = null;
     try {
-      // Convert file to Data URL to prevent 'file could not be read! code=0' error on some devices
+      // Compress and resize image using Canvas for better OCR accuracy and speed
       const dataUrl = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          let { width, height } = img;
+          const MAX_DIM = 1200; // Optimal for OCR speed and accuracy
+
+          if (width > height && width > MAX_DIM) {
+            height = Math.round(height * (MAX_DIM / width));
+            width = MAX_DIM;
+          } else if (height > MAX_DIM) {
+            width = Math.round(width * (MAX_DIM / height));
+            height = MAX_DIM;
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+            return;
+          }
+          
+          // Draw and apply simple grayscale & high contrast filter for better OCR text recognition
+          ctx.filter = 'grayscale(100%) contrast(1.2)';
+          ctx.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL("image/jpeg", 0.7));
+        };
+        img.onerror = () => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        };
+        img.src = URL.createObjectURL(file);
       });
 
       worker = await createWorker('ind', 1, {
@@ -262,8 +293,10 @@ function TransactionFormInner(props: {
       }
 
       const merchantLine = lines.find(l => {
-        const clean = l.trim();
-        return clean.length > 4 && !/[0-9]{5,}/.test(clean) && !/total|jumlah|tanggal|tgl/i.test(clean);
+        const cleanAlpha = l.replace(/[^a-zA-Z0-9\s]/g, '').trim();
+        const originalClean = l.trim();
+        const hasLetters = /[a-zA-Z]{3,}/.test(cleanAlpha);
+        return hasLetters && cleanAlpha.length > 3 && !/[0-9]{5,}/.test(originalClean) && !/total|jumlah|tanggal|tgl|cash|kembali|tunai|struk/i.test(originalClean);
       });
       
       if (merchantLine) {
