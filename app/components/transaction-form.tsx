@@ -297,19 +297,24 @@ function TransactionFormInner(props: {
       let totalAmount = 0;       // tier 2: keyword match excl. subtotal
       let grandTotalAmount = 0;  // tier 1: "grand" or explicit grand total line
 
+      const allAmounts = new Set<number>();
+      let maxAmount = 0;
+
       const parseAmount = (str: string): number => {
         // Find largest number sequence, allowing multiple dots/spaces as thousands separators
         const numbers = str.match(/\d{1,3}(?:[., ]+\d{3})+|\d{4,}/g);
         if (!numbers) return 0;
-        let max = 0;
+        let lineMax = 0;
         for (const num of numbers) {
           const clean = num.replace(/[,. ]/g, "");
           const val = parseInt(clean);
-          if (!isNaN(val) && val >= 1000 && val < 50_000_000 && val > max) {
-            max = val;
+          if (!isNaN(val) && val >= 1000 && val < 50_000_000) {
+            allAmounts.add(val);
+            if (val > maxAmount) maxAmount = val;
+            if (val > lineMax) lineMax = val;
           }
         }
-        return max;
+        return lineMax;
       };
 
       let lastLineWasTotal = false;
@@ -345,7 +350,45 @@ function TransactionFormInner(props: {
         }
       }
 
-      const finalAmount = grandTotalAmount || totalAmount || foundAmount;
+      let finalAmount = grandTotalAmount || totalAmount || foundAmount;
+      
+      // Anti-Column-Split Heuristic:
+      // If the keyword matched a smaller number (like Subtotal), but there is a larger number
+      // on the receipt, the larger number is almost certainly the real Total.
+      // Exception: The larger number is the Cash given by the customer.
+      if (maxAmount > finalAmount) {
+         // Cash is almost always a round number (multiples of 10.000).
+         const isCash = maxAmount % 10000 === 0;
+         
+         // Let's check mathematically if maxAmount = Cash = Total(B) + Change(A)
+         let isMathCash = false;
+         let mathTotal = 0;
+         const amountArr = Array.from(allAmounts).sort((a, b) => b - a); // Descending
+         
+         for (let i = 1; i < amountArr.length; i++) {
+            const B = amountArr[i];
+            const A = maxAmount - B;
+            if (allAmounts.has(A)) {
+               // A + B = maxAmount exists on the receipt!
+               // Check if A is just a tax percentage of B (e.g., 10%, 11%, 2%)
+               const ratio = A / B;
+               const isTax = [0.02, 0.05, 0.10, 0.11, 0.12, 0.21].some(tax => Math.abs(ratio - tax) < 0.005);
+               if (!isTax) {
+                  // Not a tax, so maxAmount is Cash, and B is the real Total!
+                  isMathCash = true;
+                  mathTotal = B;
+               }
+               break;
+            }
+         }
+         
+         if (isMathCash) {
+             finalAmount = mathTotal;
+         } else if (!isCash) {
+             // If it's not a round cash number and no math proofs, it's definitely the Grand Total.
+             finalAmount = maxAmount;
+         }
+      }
 
       if (finalAmount > 0) {
         setRawAmount(finalAmount.toString());
