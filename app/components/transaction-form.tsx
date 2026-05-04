@@ -15,7 +15,7 @@ import { usePortalContainer } from "~/components/bottom-sheet";
 import { NUM, type CategoryKey, type ThemeTokens, CUSTOM_COLORS, THEMES } from "~/components/theme";
 import { STR } from "~/lib/i18n";
 import { formatIDR, monthNameID } from "~/lib/format";
-import { createWorker } from "tesseract.js";
+import { createWorker, PSM } from "tesseract.js";
 import { ScanIcon } from "./icons-extra";
 import { useToast } from "~/components/toast";
 import type { Category } from "~/db/schema";
@@ -281,7 +281,7 @@ function TransactionFormInner(props: {
       // PSM 4: Assume a single column of text of variable sizes. 
       // This is crucial for receipts to prevent "Total" and "81.600" from splitting into separate columns.
       await worker.setParameters({
-        tessedit_pageseg_mode: "4",
+        tessedit_pageseg_mode: PSM.SINGLE_COLUMN,
       });
 
       const { data: { text } } = await worker.recognize(dataUrl);

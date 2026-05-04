@@ -436,11 +436,11 @@ export async function createAccount(userId: string, name: string, type: "cash" |
       id: txId,
       userId,
       accountId: id,
-      categoryId: "system",
+      category: "income",
       type: "income",
       amount: initialBalance,
-      title: "Saldo Awal",
-      date: new Date().toISOString(),
+      note: "Saldo Awal",
+      occurredAt: new Date(),
     });
   }
 
