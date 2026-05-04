@@ -176,16 +176,14 @@ function TransactionFormInner(props: {
 
     let worker: Awaited<ReturnType<typeof createWorker>> | null = null;
     try {
-      // Compress and resize image using Canvas for better OCR accuracy and speed
-      // We use URL.createObjectURL which is highly memory-efficient compared to FileReader
       const dataUrl = await new Promise<string>((resolve, reject) => {
         const blobUrl = URL.createObjectURL(file);
         const img = new Image();
         
-        img.onload = () => {
+        const processCanvas = (imageElement: HTMLImageElement) => {
           try {
             const canvas = document.createElement("canvas");
-            let { width, height } = img;
+            let { width, height } = imageElement;
             const MAX_DIM = 1000; // Optimal memory-safe dimension
 
             if (width > height && width > MAX_DIM) {
@@ -203,22 +201,35 @@ function TransactionFormInner(props: {
             const ctx = canvas.getContext("2d", { willReadFrequently: true });
             if (!ctx) throw new Error("Gagal membuat konteks canvas");
             
-            ctx.drawImage(img, 0, 0, width, height);
+            ctx.drawImage(imageElement, 0, 0, width, height);
             const compressedUrl = canvas.toDataURL("image/jpeg", 0.6);
             
-            URL.revokeObjectURL(blobUrl);
             resolve(compressedUrl);
           } catch (e) {
             console.error("Canvas error:", e);
-            URL.revokeObjectURL(blobUrl);
             reject(new Error("Memori tidak cukup untuk memproses gambar ini"));
           }
         };
+
+        img.onload = () => {
+          processCanvas(img);
+          URL.revokeObjectURL(blobUrl);
+        };
         
         img.onerror = () => {
-          console.error("Image load error for canvas");
+          console.error("Blob URL load failed, falling back to FileReader");
           URL.revokeObjectURL(blobUrl);
-          reject(new Error("Format gambar tidak didukung atau file rusak"));
+          
+          // Fallback if Blob URL fails (e.g. CSP restrictions)
+          const reader = new FileReader();
+          reader.onload = () => {
+            const fallbackImg = new Image();
+            fallbackImg.onload = () => processCanvas(fallbackImg);
+            fallbackImg.onerror = () => reject(new Error("Format gambar tidak didukung atau file rusak"));
+            fallbackImg.src = reader.result as string;
+          };
+          reader.onerror = () => reject(new Error("Gagal membaca file dari sistem"));
+          reader.readAsDataURL(file);
         };
         
         img.src = blobUrl;
@@ -533,9 +544,9 @@ function TransactionFormInner(props: {
         <div className="flex items-center justify-between mb-4">
           {!isEdit && (
             <div className="flex items-center gap-2">
-              <input type="file" ref={scanCameraRef} className="hidden" accept="image/*" capture="environment"
+              <input type="file" ref={scanCameraRef} className="hidden" accept="image/jpeg, image/png, image/webp" capture="environment"
                 onChange={(e) => e.target.files?.[0] && handleScan(e.target.files[0])} />
-              <input type="file" ref={scanGalleryRef} className="hidden" accept="image/*"
+              <input type="file" ref={scanGalleryRef} className="hidden" accept="image/jpeg, image/png, image/webp"
                 onChange={(e) => e.target.files?.[0] && handleScan(e.target.files[0])} />
               <button
                 ref={scanBtnRef}
@@ -563,9 +574,9 @@ function TransactionFormInner(props: {
               </div>
               {!isEdit && (
                 <>
-                  <input type="file" ref={scanCameraRef} className="hidden" accept="image/*" capture="environment"
+                  <input type="file" ref={scanCameraRef} className="hidden" accept="image/jpeg, image/png, image/webp" capture="environment"
                     onChange={(e) => e.target.files?.[0] && handleScan(e.target.files[0])} />
-                  <input type="file" ref={scanGalleryRef} className="hidden" accept="image/*"
+                  <input type="file" ref={scanGalleryRef} className="hidden" accept="image/jpeg, image/png, image/webp"
                     onChange={(e) => e.target.files?.[0] && handleScan(e.target.files[0])} />
                   <button
                     ref={scanBtnRef}
