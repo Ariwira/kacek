@@ -209,8 +209,7 @@ function TransactionFormInner(props: {
               return;
             }
             
-            // Draw and apply simple grayscale & high contrast filter for better OCR text recognition
-            ctx.filter = 'grayscale(100%) contrast(1.2)';
+            // Draw image without filter to save memory and prevent crash on large photos
             ctx.drawImage(img, 0, 0, width, height);
             resolve(canvas.toDataURL("image/jpeg", 0.7));
           } catch (e) {
@@ -244,32 +243,39 @@ function TransactionFormInner(props: {
       let totalAmount = 0;       // tier 2: keyword match excl. subtotal
       let grandTotalAmount = 0;  // tier 1: "grand" or explicit grand total line
 
-      const parseAmount = (token: string): number => {
-        if (/[0-9]+[/-][0-9]+[/-][0-9]+/.test(token)) return 0; // skip dates
-        const digits = token.replace(/[,.](?=[0-9]{3,})/g, "").replace(/[^0-9]/g, "");
-        const val = parseInt(digits);
-        return !isNaN(val) && val >= 1000 && val < 50_000_000 ? val : 0;
+      const parseAmount = (str: string): number => {
+        // Find largest number sequence in the string, ignoring dots/commas/spaces
+        const numbers = str.match(/\d[0-9., ]*\d/g);
+        if (!numbers) return 0;
+        let max = 0;
+        for (const num of numbers) {
+          if (/[0-9]{2,4}[/-][0-9]{1,2}[/-][0-9]{1,4}/.test(num)) continue; // skip dates
+          const clean = num.replace(/[,. ]/g, "");
+          const val = parseInt(clean);
+          if (!isNaN(val) && val >= 1000 && val < 50_000_000 && val > max) {
+            max = val;
+          }
+        }
+        return max;
       };
 
       for (const line of lines) {
         const cleanLine = line.replace(/[|[\]]/g, "").trim();
         if (!cleanLine) continue;
 
-        for (const token of cleanLine.split(/\s+/)) {
-          const val = parseAmount(token);
-          if (!val) continue;
+        const val = parseAmount(cleanLine);
+        if (!val) continue;
 
-          if (val > foundAmount) foundAmount = val;
+        if (val > foundAmount) foundAmount = val;
 
-          const isGrand = /grand\s*total|total\s*bayar|grand\s*bill|total\s*bill/i.test(cleanLine);
-          const isTotal = /total|jumlah|bayar|tagihan|net|summary/i.test(cleanLine);
-          const isSubtotal = /sub\s*total|subtotal/i.test(cleanLine);
+        const isGrand = /grand\s*total|total\s*bayar|grand\s*bill|total\s*bill/i.test(cleanLine);
+        const isTotal = /total|jumlah|bayar|tagihan|net|summary/i.test(cleanLine);
+        const isSubtotal = /sub\s*total|subtotal/i.test(cleanLine);
 
-          if (isGrand && val > grandTotalAmount) {
-            grandTotalAmount = val;
-          } else if (isTotal && !isSubtotal && val > totalAmount) {
-            totalAmount = val;
-          }
+        if (isGrand && val > grandTotalAmount) {
+          grandTotalAmount = val;
+        } else if (isTotal && !isSubtotal && val > totalAmount) {
+          totalAmount = val;
         }
       }
 
@@ -309,7 +315,11 @@ function TransactionFormInner(props: {
       
       if (merchantLine) {
         const noteInput = document.querySelector('input[name="note"]') as HTMLInputElement;
-        if (noteInput) noteInput.value = merchantLine.trim().substring(0, 50);
+        if (noteInput) {
+          const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
+          nativeSetter?.call(noteInput, merchantLine.trim().substring(0, 50));
+          noteInput.dispatchEvent(new Event('input', { bubbles: true }));
+        }
       }
 
       if (finalAmount === 0 && !merchantLine) {
@@ -317,7 +327,8 @@ function TransactionFormInner(props: {
       }
     } catch (err) {
       console.error("OCR Error:", err);
-      const msg = err instanceof Error ? err.message : "Gagal memproses gambar.";
+      const errStr = err instanceof Error ? err.message : String(err);
+      const msg = errStr || "Gagal memproses gambar.";
       showToast(`Scan gagal: ${msg.substring(0, 80)}`, { type: "error" });
     } finally {
       try { await worker?.terminate(); } catch {}
