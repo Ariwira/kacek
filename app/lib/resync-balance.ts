@@ -11,7 +11,11 @@ async function resync() {
   for (const account of allAccounts) {
     // Get all transactions for this account OR transactions with no account (to be linked)
     const txs = await db.select().from(transactions).where(
-      eq(transactions.userId, account.userId)
+      and(
+        eq(transactions.userId, account.userId),
+        // include if it belongs to this account, OR if it's the primary account and tx has no account (fallback)
+        sql`${transactions.accountId} = ${account.id} OR ${transactions.accountId} IS NULL`
+      )
     );
     
     let balance = 0;

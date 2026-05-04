@@ -429,6 +429,21 @@ export async function createAccount(userId: string, name: string, type: "cash" |
     type,
     balance: initialBalance,
   });
+
+  if (initialBalance > 0) {
+    const txId = crypto.randomUUID();
+    await db.insert(transactions).values({
+      id: txId,
+      userId,
+      accountId: id,
+      categoryId: "system",
+      type: "income",
+      amount: initialBalance,
+      title: "Saldo Awal",
+      date: new Date().toISOString(),
+    });
+  }
+
   return id;
 }
 

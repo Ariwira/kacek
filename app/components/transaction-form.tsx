@@ -278,6 +278,12 @@ function TransactionFormInner(props: {
         }
       });
 
+      // PSM 4: Assume a single column of text of variable sizes. 
+      // This is crucial for receipts to prevent "Total" and "81.600" from splitting into separate columns.
+      await worker.setParameters({
+        tessedit_pageseg_mode: "4",
+      });
+
       const { data: { text } } = await worker.recognize(dataUrl);
 
       // Amount extraction with tiered priority:
@@ -290,8 +296,8 @@ function TransactionFormInner(props: {
       let grandTotalAmount = 0;  // tier 1: "grand" or explicit grand total line
 
       const parseAmount = (str: string): number => {
-        // Find largest number sequence, allowing dots/spaces as thousands separators
-        const numbers = str.match(/\d{1,3}(?:[., ]\d{3})+|\d{4,}/g);
+        // Find largest number sequence, allowing multiple dots/spaces as thousands separators
+        const numbers = str.match(/\d{1,3}(?:[., ]+\d{3})+|\d{4,}/g);
         if (!numbers) return 0;
         let max = 0;
         for (const num of numbers) {
