@@ -273,9 +273,16 @@ function TransactionFormInner(props: {
       });
 
       worker = await createWorker('ind', 1, {
+        langPath: '/tessdata',
         logger: m => {
-          if (m.status === 'recognizing text') {
-            setScanProgress(Math.round(m.progress * 100));
+          if (m.status === 'loading tesseract core') {
+            setScanProgress(Math.round(m.progress * 20));
+          } else if (m.status === 'loading language traineddata') {
+            setScanProgress(20 + Math.round(m.progress * 30));
+          } else if (m.status === 'initializing api') {
+            setScanProgress(50 + Math.round(m.progress * 10));
+          } else if (m.status === 'recognizing text') {
+            setScanProgress(60 + Math.round(m.progress * 40));
           }
         }
       });
