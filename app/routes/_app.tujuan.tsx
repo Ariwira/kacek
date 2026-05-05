@@ -480,7 +480,6 @@ function GoalEditForm({
             <input
               type="text"
               inputMode="numeric"
-              pattern="[0-9]*"
               required
               value={displayAmount}
               onChange={handleAmountChange}
@@ -629,7 +628,6 @@ function ContributeForm({
         <input
           type="text"
           inputMode="numeric"
-          pattern="[0-9]*"
           required
           autoFocus
           value={displayAmount}
