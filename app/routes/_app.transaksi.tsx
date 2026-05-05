@@ -51,9 +51,16 @@ export async function loader({ request }: Route.LoaderArgs) {
     to: url.searchParams.get("to"),
   };
 
-  // Deferred data for streaming with error boundaries
+  // userCategories must be eager so FilterBar renders immediately without waiting for transactions
+  const userCategories = await db
+    .select()
+    .from(categoriesTable)
+    .where(eq(categoriesTable.userId, userId))
+    .catch(e => { console.error("User Categories Error:", e); return []; });
+
   return {
     filters,
+    userCategories,
     transactions: listTransactions(userId, filters).catch(e => {
       console.error("List Transactions Error:", e);
       return [];
@@ -64,16 +71,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     }),
     stats: getUserStats(userId).catch(e => {
       console.error("User Stats Error:", e);
-      return {
-        totalTx: 0,
-        joinedAt: new Date(),
-        name: "",
-        email: "",
-      };
-    }),
-    userCategories: db.select().from(categoriesTable).where(eq(categoriesTable.userId, userId)).catch(e => {
-      console.error("User Categories Error:", e);
-      return [];
+      return { totalTx: 0, joinedAt: new Date(), name: "", email: "" };
     }),
   };
 }
@@ -203,9 +201,11 @@ export default function TransaksiPage() {
           </div>
         </div>
 
+        <FilterBar userCategories={userCategories} theme={theme} />
+
         <Suspense fallback={<TransactionSkeleton />}>
-          <Await resolve={Promise.all([transactions, recurring, userCategories])}>
-            {([resolvedTx, resolvedRecurring, resolvedUserCats]) => {
+          <Await resolve={Promise.all([transactions, recurring])}>
+            {([resolvedTx, resolvedRecurring]) => {
               // Group by date label
               const visibleTx = resolvedTx.filter((tx) => !hiddenIds.has(String(tx.id)));
               const map = new Map<string, any[]>();
@@ -219,8 +219,6 @@ export default function TransaksiPage() {
 
               return (
                 <>
-                  <FilterBar filters={filters} userCategories={resolvedUserCats} theme={theme} />
-                  
                   <GlassCard className="p-[18px] md:p-[22px] lg:p-[26px] mt-3.5">
                     {grouped.length === 0 ? (
                       <div className="text-center py-12 px-4 text-brand-text-mute text-[13px]">
@@ -516,29 +514,19 @@ export default function TransaksiPage() {
 }
 
 function FilterBar({
-  filters,
   userCategories,
   theme,
 }: {
-  filters: {
-    q: string;
-    category: string;
-    type: string;
-    from: string | null;
-    to: string | null;
-  };
   userCategories: any[];
   theme: Theme;
 }) {
+  const [searchParams] = useSearchParams();
+  const currentType = searchParams.get("type") ?? "all";
+  const currentCat = searchParams.get("cat") ?? "all";
+  const currentQ = searchParams.get("q") ?? "";
+
   const buildHref = (overrides: Record<string, string>) => {
-    const params = new URLSearchParams();
-    if (filters.q) params.set("q", filters.q);
-    if (filters.category && filters.category !== "all")
-      params.set("cat", filters.category);
-    if (filters.type && filters.type !== "all")
-      params.set("type", filters.type);
-    if (filters.from) params.set("from", filters.from);
-    if (filters.to) params.set("to", filters.to);
+    const params = new URLSearchParams(searchParams);
     for (const [k, v] of Object.entries(overrides)) {
       if (!v || v === "all") params.delete(k);
       else params.set(k, v);
@@ -566,14 +554,14 @@ function FilterBar({
           name="q"
           type="search"
           placeholder={STR.searchPlaceholderFull}
-          defaultValue={filters.q}
+          defaultValue={currentQ}
           className="flex-1 bg-transparent border-none outline-none text-brand-text text-sm font-sans min-w-0"
         />
-        {filters.category !== "all" && (
-          <input type="hidden" name="cat" value={filters.category} />
+        {currentCat !== "all" && (
+          <input type="hidden" name="cat" value={currentCat} />
         )}
-        {filters.type !== "all" && (
-          <input type="hidden" name="type" value={filters.type} />
+        {currentType !== "all" && (
+          <input type="hidden" name="type" value={currentType} />
         )}
         <button
           type="submit"
@@ -583,14 +571,14 @@ function FilterBar({
         </button>
       </Form>
 
-      {/* Type chips (Links) */}
+      {/* Type tabs — active state uses useSearchParams for instant feedback */}
       <div
         className="flex gap-1 p-0.75 rounded-full bg-brand-surface-2 border border-brand-hairline self-start max-w-full"
         role="radiogroup"
         aria-label="Tipe transaksi"
       >
         {TYPE_OPTIONS.map((opt) => {
-          const active = filters.type === opt.value;
+          const active = currentType === opt.value;
           return (
             <Link
               key={opt.value}
@@ -607,10 +595,10 @@ function FilterBar({
         })}
       </div>
 
-      {/* Category chips */}
+      {/* Category chips — active state uses useSearchParams for instant feedback */}
       <div className="flex flex-nowrap gap-2 overflow-x-auto scrollbar-none items-center py-2 px-1 -mx-1 w-[calc(100%+8px)]">
         {categoryList.map((c) => {
-          const active = filters.category === c.key;
+          const active = currentCat === c.key;
           const cColor = THEMES[theme].catColor(c.color || c.key);
           return (
             <Link
