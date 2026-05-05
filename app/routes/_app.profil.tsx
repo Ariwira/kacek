@@ -510,7 +510,6 @@ function TambahDompetForm({
           <input
             type="text"
             inputMode="numeric"
-            pattern="[0-9]*"
             value={displayAmount}
             onChange={handleAmountChange}
             placeholder="0"
