@@ -2,7 +2,7 @@ export const formatIDR = (n: number, opts?: { compact?: boolean }) =>
   new Intl.NumberFormat("id-ID", {
     style: "currency",
     currency: "IDR",
-    maximumFractionDigits: 0,
+    maximumFractionDigits: opts?.compact ? 2 : 0,
     notation: opts?.compact ? "compact" : "standard",
   }).format(n);
 
