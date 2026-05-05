@@ -331,7 +331,7 @@ function BudgetEditForm({
           autoFocus
           className="font-mono text-[22px] font-bold text-brand-text bg-transparent border-none outline-none w-full"
         />
-        <input type="hidden" name="amount" value={rawAmount} />
+        <input type="hidden" name="amount" value={rawAmount || "0"} />
       </div>
       <button
         type="submit"

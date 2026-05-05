@@ -11,7 +11,7 @@ const schema = z.object({
   category: z.string().min(1, "Pilih kategori.").refine((v) => v !== "income", {
     message: "Kategori income tidak punya anggaran.",
   }),
-  amount: z.coerce.number().int().positive("Anggaran harus lebih dari 0."),
+  amount: z.coerce.number().int().nonnegative("Anggaran tidak boleh negatif."),
   month: z.string().regex(/^\d{4}-\d{2}$/, "Format bulan tidak valid.").optional(),
 });
 
@@ -37,6 +37,13 @@ export async function action({ request }: Route.ActionArgs) {
         eq(budgets.month, month),
       ),
     );
+  if (parsed.data.amount === 0) {
+    if (existing[0]) {
+      await db.delete(budgets).where(eq(budgets.id, existing[0].id));
+    }
+    return { success: true };
+  }
+
   if (existing[0]) {
     await db
       .update(budgets)
