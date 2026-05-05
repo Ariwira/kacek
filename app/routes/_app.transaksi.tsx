@@ -203,6 +203,7 @@ export default function TransaksiPage() {
 
         <FilterBar userCategories={userCategories} theme={theme} />
 
+        <div className={`transition-opacity duration-150 ${navigation.state === "loading" ? "opacity-40 pointer-events-none" : "opacity-100"}`}>
         <Suspense fallback={<TransactionSkeleton />}>
           <Await resolve={Promise.all([transactions, recurring])}>
             {([resolvedTx, resolvedRecurring]) => {
@@ -344,6 +345,7 @@ export default function TransaksiPage() {
             }}
           </Await>
         </Suspense>
+        </div>
       </div>
 
       <BottomSheet
@@ -521,12 +523,20 @@ function FilterBar({
   theme: Theme;
 }) {
   const [searchParams] = useSearchParams();
-  const currentType = searchParams.get("type") ?? "all";
-  const currentCat = searchParams.get("cat") ?? "all";
-  const currentQ = searchParams.get("q") ?? "";
+  const navigation = useNavigation();
+
+  // Use the pending URL during navigation so active state updates instantly on click,
+  // before the loader resolves. Falls back to current URL when idle.
+  const effectiveParams = navigation.location
+    ? new URLSearchParams(navigation.location.search)
+    : searchParams;
+
+  const currentType = effectiveParams.get("type") ?? "all";
+  const currentCat = effectiveParams.get("cat") ?? "all";
+  const currentQ = effectiveParams.get("q") ?? "";
 
   const buildHref = (overrides: Record<string, string>) => {
-    const params = new URLSearchParams(searchParams);
+    const params = new URLSearchParams(effectiveParams);
     for (const [k, v] of Object.entries(overrides)) {
       if (!v || v === "all") params.delete(k);
       else params.set(k, v);
