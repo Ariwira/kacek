@@ -551,6 +551,7 @@ function FilterBar({
       >
         <SearchIcon size={15} className="text-brand-text-mute" />
         <input
+          key={currentQ}
           name="q"
           type="search"
           placeholder={STR.searchPlaceholderFull}
