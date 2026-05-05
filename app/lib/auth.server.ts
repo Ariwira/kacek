@@ -4,7 +4,12 @@ import { db } from "./db.server";
 import { users } from "~/db/schema";
 import { eq } from "drizzle-orm";
 
-const SESSION_SECRET = process.env.SESSION_SECRET || "dev-only-insecure-secret-change-me";
+const SESSION_SECRET = process.env.SESSION_SECRET;
+if (!SESSION_SECRET || SESSION_SECRET === "dev-only-insecure-secret-change-me") {
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("SESSION_SECRET environment variable harus di-set di production.");
+  }
+}
 
 const storage = createCookieSessionStorage({
   cookie: {
@@ -12,7 +17,7 @@ const storage = createCookieSessionStorage({
     httpOnly: true,
     sameSite: "lax",
     path: "/",
-    secrets: [SESSION_SECRET],
+    secrets: [SESSION_SECRET ?? "dev-only-insecure-secret-change-me"],
     secure: process.env.NODE_ENV === "production",
     maxAge: 60 * 60 * 24 * 30, // 30 days
   },

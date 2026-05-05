@@ -11,13 +11,15 @@ export async function action({ request, params }: Route.ActionArgs) {
   
   // 1. Get transaction to know amount and account
   const [tx] = await db.select().from(transactions).where(and(eq(transactions.id, id), eq(transactions.userId, userId)));
-  
-  if (tx && tx.accountId) {
-    // 2. Reverse balance change
+
+  if (!tx) return { error: "Transaksi tidak ditemukan." };
+
+  // 2. Reverse balance change (including when accountId is null — skip gracefully)
+  if (tx.accountId) {
     const balanceChange = tx.type === "income" ? -tx.amount : tx.amount;
     await db
       .update(accounts)
-      .set({ 
+      .set({
         balance: sql`${accounts.balance} + ${balanceChange}`
       })
       .where(and(eq(accounts.userId, userId), eq(accounts.id, tx.accountId)));
@@ -27,7 +29,7 @@ export async function action({ request, params }: Route.ActionArgs) {
   await db
     .delete(transactions)
     .where(and(eq(transactions.id, id), eq(transactions.userId, userId)));
-    
+
   return { success: true };
 }
 

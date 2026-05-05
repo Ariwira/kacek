@@ -45,7 +45,8 @@ export async function action({ request, params }: Route.ActionArgs) {
     .where(and(eq(recurringTransactions.id, id), eq(recurringTransactions.userId, userId)));
 
   const referer = request.headers.get("Referer") ?? "/transaksi";
-  return redirect(referer);
+  const safePath = (() => { try { const u = new URL(referer); return u.pathname + u.search; } catch { return referer.startsWith("/") ? referer : "/transaksi"; } })();
+  return redirect(safePath);
 }
 
 export function loader() {

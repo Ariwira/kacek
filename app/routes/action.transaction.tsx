@@ -14,7 +14,14 @@ const schema = z.object({
   category: z.string().min(1, "Pilih kategori."),
   accountId: z.string().min(1, "Pilih akun/dompet."),
   note: z.string().max(200).optional(),
-  date: z.string().min(1, "Tanggal harus diisi."),
+  date: z.string().min(1, "Tanggal harus diisi.").refine((v) => {
+    const d = new Date(v);
+    if (isNaN(d.getTime())) return false;
+    const now = new Date();
+    const minDate = new Date(now.getFullYear() - 10, 0, 1);
+    const maxDate = new Date(now.getFullYear() + 1, 11, 31);
+    return d >= minDate && d <= maxDate;
+  }, "Tanggal tidak valid atau di luar batas wajar."),
   isRecurring: z.string().optional(),
   frequency: z.enum(["daily", "weekly", "monthly", "yearly"]).optional(),
 });
@@ -27,16 +34,25 @@ export async function action({ request }: Route.ActionArgs) {
   const receiptFile = form.get("receipt") as File | null;
   let receiptUrl: string | null = null;
 
+  const ALLOWED_EXTS = new Set([".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif", ".avif", ".bmp", ".tif", ".tiff"]);
+  const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10MB
+
   if (receiptFile && receiptFile.size > 0) {
+    const ext = path.extname(receiptFile.name).toLowerCase();
+    if (!ALLOWED_EXTS.has(ext)) {
+      return { error: "File struk harus berformat JPG, PNG, atau WebP." };
+    }
+    if (receiptFile.size > MAX_UPLOAD_BYTES) {
+      return { error: "Ukuran file struk maksimal 10MB." };
+    }
     try {
       const uploadDir = path.join(process.cwd(), "public", "uploads", "receipts");
       if (!fs.existsSync(uploadDir)) {
         fs.mkdirSync(uploadDir, { recursive: true });
       }
-      const ext = path.extname(receiptFile.name) || ".jpg";
       const filename = `${crypto.randomUUID()}${ext}`;
       const filePath = path.join(uploadDir, filename);
-      
+
       const buffer = Buffer.from(await receiptFile.arrayBuffer());
       fs.writeFileSync(filePath, buffer);
       receiptUrl = `/uploads/receipts/${filename}`;

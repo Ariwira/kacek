@@ -9,7 +9,8 @@ export async function action({ request }: Route.ActionArgs) {
   const theme: Theme = raw === "light" ? "light" : "dark";
   const headers = await setThemeHeader(theme);
   const referer = request.headers.get("Referer") ?? "/";
-  return redirect(referer, { headers });
+  const safePath = (() => { try { const u = new URL(referer); return u.pathname + u.search; } catch { return referer.startsWith("/") ? referer : "/"; } })();
+  return redirect(safePath, { headers });
 }
 
 export function loader() {

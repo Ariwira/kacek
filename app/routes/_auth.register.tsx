@@ -8,7 +8,10 @@ import { createUserSession, register } from "~/lib/auth.server";
 const schema = z.object({
   name: z.string().min(1, "Nama wajib diisi.").max(80),
   email: z.string().email("Email tidak valid."),
-  password: z.string().min(8, "Password minimal 8 karakter."),
+  password: z.string()
+    .min(8, "Password minimal 8 karakter.")
+    .regex(/[a-zA-Z]/, "Password harus mengandung huruf.")
+    .regex(/[0-9]/, "Password harus mengandung angka."),
 });
 
 export async function action({ request }: Route.ActionArgs) {

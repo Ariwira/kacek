@@ -360,7 +360,7 @@ function TransactionFormInner(props: {
         for (let j = i; j < amountArr.length; j++) {
           const sum = amountArr[i] + amountArr[j];
           if (allAmounts.has(sum)) {
-            mathSums.push({ total: sum, comp1: amountArr[i], comp2: amountArr[j] }); // comp1 <= comp2 since amountArr is descending
+            mathSums.push({ total: sum, comp1: amountArr[i], comp2: amountArr[j] }); // comp1 >= comp2 since amountArr is descending
           }
         }
       }
@@ -368,12 +368,12 @@ function TransactionFormInner(props: {
       for (const sumObj of mathSums) {
          // Check if this sum is Cash (Cash = Total + Change)
          const isRound = sumObj.total % 10000 === 0;
-         const ratio = sumObj.comp1 / sumObj.comp2;
+         const ratio = sumObj.comp2 / sumObj.comp1; // comp2/comp1 = tax/subtotal ≈ taxrate (e.g. 0.11)
          const isTax = [0.02, 0.05, 0.10, 0.11, 0.12, 0.21].some(tax => Math.abs(ratio - tax) < 0.005);
-         
+
          if (isRound && !isTax) {
-            // sumObj.total is Cash. sumObj.comp2 is the mathematically proven Real Total.
-            if (sumObj.comp2 > verifiedTotal) verifiedTotal = sumObj.comp2;
+            // sumObj.total is Cash. comp1 (larger) is the Real Total; comp2 (smaller) is Change.
+            if (sumObj.comp1 > verifiedTotal) verifiedTotal = sumObj.comp1;
          } else {
             // sumObj.total is the proven Real Total (e.g. Subtotal + Tax, or Item1 + Item2)
             if (sumObj.total > verifiedTotal) verifiedTotal = sumObj.total;
@@ -423,14 +423,16 @@ function TransactionFormInner(props: {
         const cleanAlpha = l.replace(/[^a-zA-Z0-9\s]/g, '').trim();
         const originalClean = l.trim();
         const hasLetters = /[a-zA-Z]{3,}/.test(cleanAlpha);
-        return hasLetters && cleanAlpha.length > 3 && !/[0-9]{5,}/.test(originalClean) && !/total|jumlah|tanggal|tgl|cash|kembali|tunai|struk/i.test(originalClean);
+        const isNonMerchant = /total|jumlah|tanggal|tgl|cash|kembali|tunai|struk|subtotal|pajak|ppn|tax|diskon|discount|kasir|meja|table|nomor|telp|telepon|hp\b|alamat|terima|thank|wifi|npwp|harga|satuan|qty|pcs|item|rp\b|rupiah|invoice|bon\b|receipt|kembalian|pembayaran|bayar/i.test(originalClean);
+        return hasLetters && cleanAlpha.length > 3 && !/[0-9]{5,}/.test(originalClean) && !isNonMerchant;
       });
-      
+
       if (merchantLine) {
         const noteInput = document.querySelector('input[name="note"]') as HTMLInputElement;
         if (noteInput) {
+          const cleanedMerchant = merchantLine.replace(/[|*_=\-]{2,}/g, '').trim().substring(0, 50);
           const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
-          nativeSetter?.call(noteInput, merchantLine.trim().substring(0, 50));
+          nativeSetter?.call(noteInput, cleanedMerchant);
           noteInput.dispatchEvent(new Event('input', { bubbles: true }));
         }
       }
@@ -634,14 +636,14 @@ function TransactionFormInner(props: {
         <div className="flex items-center justify-between mb-4">
           {!isEdit && (
             <div className="flex items-center gap-2">
-              <input type="file" ref={scanCameraRef} className="hidden" accept="image/jpeg, image/png, image/webp" capture="environment"
+              <input type="file" ref={scanCameraRef} className="hidden" accept="image/*" capture="environment"
                 onChange={(e) => {
                   const input = e.target;
                   if (input.files?.[0]) {
                     handleScan(input.files[0]).finally(() => { input.value = ''; });
                   }
                 }} />
-              <input type="file" ref={scanGalleryRef} className="hidden" accept="image/jpeg, image/png, image/webp"
+              <input type="file" ref={scanGalleryRef} className="hidden" accept="image/*"
                 onChange={(e) => {
                   const input = e.target;
                   if (input.files?.[0]) {
@@ -674,7 +676,7 @@ function TransactionFormInner(props: {
               </div>
               {!isEdit && (
                 <>
-                  <input type="file" ref={scanCameraRef} className="hidden" accept="image/jpeg, image/png, image/webp" capture="environment"
+                  <input type="file" ref={scanCameraRef} className="hidden" accept="image/*" capture="environment"
                     onChange={(e) => {
                       const input = e.target;
                       if (input.files?.[0]) {

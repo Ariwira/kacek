@@ -11,8 +11,8 @@ const schema = z.object({
   category: z.string().min(1, "Pilih kategori.").refine((v) => v !== "income", {
     message: "Kategori income tidak punya anggaran.",
   }),
-  amount: z.coerce.number().int().min(0),
-  month: z.string().optional(),
+  amount: z.coerce.number().int().positive("Anggaran harus lebih dari 0."),
+  month: z.string().regex(/^\d{4}-\d{2}$/, "Format bulan tidak valid.").optional(),
 });
 
 export async function action({ request }: Route.ActionArgs) {

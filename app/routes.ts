@@ -33,6 +33,7 @@ export default [
   route("action/goal", "routes/action.goal.tsx"),
   route("action/goal/:id/delete", "routes/action.goal.delete.tsx"),
   route("action/goal/:id/contribute", "routes/action.goal.contribute.tsx"),
+  route("action/goal/:id/complete", "routes/action.goal.complete.tsx"),
   route("action/logout", "routes/action.logout.tsx"),
   route("action/notification/read", "routes/action.notification.read.tsx"),
   route("action/category", "routes/action.category.tsx"),

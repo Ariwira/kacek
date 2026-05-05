@@ -7,7 +7,7 @@ import { createUserSession, login } from "~/lib/auth.server";
 
 const schema = z.object({
   email: z.string().email("Email tidak valid."),
-  password: z.string().min(1, "Password wajib diisi."),
+  password: z.string().min(8, "Password minimal 8 karakter."),
 });
 
 export async function action({ request }: Route.ActionArgs) {
