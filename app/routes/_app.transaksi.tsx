@@ -6,9 +6,8 @@ import {
   useNavigation,
   useRouteLoaderData,
   useSearchParams,
-  Await,
 } from "react-router";
-import { useMemo, useState, useEffect, useRef, Suspense } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import { eq } from "drizzle-orm";
 import { db } from "~/lib/db.server";
 import { categories as categoriesTable } from "~/db/schema";
@@ -38,7 +37,6 @@ import { TransactionForm } from "~/components/transaction-form";
 import { STR } from "~/lib/i18n";
 import { formatIDR, formatRelativeDay } from "~/lib/format";
 import { useToast } from "~/components/toast";
-import { TransactionSkeleton } from "~/components/skeletons";
 
 export async function loader({ request }: Route.LoaderArgs) {
   const userId = await requireUserId(request);
@@ -51,29 +49,18 @@ export async function loader({ request }: Route.LoaderArgs) {
     to: url.searchParams.get("to"),
   };
 
-  // userCategories must be eager so FilterBar renders immediately without waiting for transactions
-  const userCategories = await db
-    .select()
-    .from(categoriesTable)
-    .where(eq(categoriesTable.userId, userId))
-    .catch(e => { console.error("User Categories Error:", e); return []; });
+  const [userCategories, transactions, recurring, stats] = await Promise.all([
+    db.select().from(categoriesTable).where(eq(categoriesTable.userId, userId))
+      .catch(e => { console.error("User Categories Error:", e); return []; }),
+    listTransactions(userId, filters)
+      .catch(e => { console.error("List Transactions Error:", e); return []; }),
+    listRecurringTransactions(userId)
+      .catch(e => { console.error("List Recurring Error:", e); return []; }),
+    getUserStats(userId)
+      .catch(e => { console.error("User Stats Error:", e); return { totalTx: 0, joinedAt: new Date(), name: "", email: "" }; }),
+  ]);
 
-  return {
-    filters,
-    userCategories,
-    transactions: listTransactions(userId, filters).catch(e => {
-      console.error("List Transactions Error:", e);
-      return [];
-    }),
-    recurring: listRecurringTransactions(userId).catch(e => {
-      console.error("List Recurring Error:", e);
-      return [];
-    }),
-    stats: getUserStats(userId).catch(e => {
-      console.error("User Stats Error:", e);
-      return { totalTx: 0, joinedAt: new Date(), name: "", email: "" };
-    }),
-  };
+  return { filters, userCategories, transactions, recurring, stats };
 }
 
 const DEFAULT_ACTIVE_CATS: CategoryKey[] = [
@@ -151,21 +138,15 @@ export default function TransaksiPage() {
   return (
     <div className="kc-bg-gradient min-h-screen p-4 md:p-6 lg:p-7 pb-24 md:pb-8 lg:pb-7 text-brand-text font-sans">
       <div className="max-w-[1440px] mx-auto relative">
-        <Suspense fallback={<Header theme={theme} T={T} userInitials=".." />}>
-          <Await resolve={stats}>
-            {(resolvedStats) => (
-              <Header 
-                theme={theme} 
-                T={T} 
-                userInitials={
-                  resolvedStats?.name || resolvedStats?.email 
-                    ? (resolvedStats.name || resolvedStats.email).substring(0, 2).toUpperCase()
-                    : "??"
-                } 
-              />
-            )}
-          </Await>
-        </Suspense>
+        <Header
+          theme={theme}
+          T={T}
+          userInitials={
+            stats?.name || stats?.email
+              ? (stats.name || stats.email).substring(0, 2).toUpperCase()
+              : "??"
+          }
+        />
 
         {/* Page heading */}
         <div className="mb-3.5 mt-1 flex justify-between items-start gap-4">
@@ -173,15 +154,9 @@ export default function TransaksiPage() {
             <h1 className="text-xl md:text-2xl font-bold tracking-tight text-brand-text m-0">
               {STR.txPageTitle}
             </h1>
-            <Suspense fallback={<div className="text-xs text-brand-text-dim mt-1">Memuat...</div>}>
-               <Await resolve={transactions}>
-                  {(resolvedTx) => (
-                    <div className="text-xs text-brand-text-dim mt-1">
-                      {STR.txPageSubtitle(resolvedTx.length)}
-                    </div>
-                  )}
-               </Await>
-            </Suspense>
+            <div className="text-xs text-brand-text-dim mt-1">
+              {STR.txPageSubtitle(transactions.length)}
+            </div>
           </div>
           <div className="flex gap-2">
             <button
@@ -204,11 +179,8 @@ export default function TransaksiPage() {
         <FilterBar userCategories={userCategories} theme={theme} />
 
         <div className={`transition-opacity duration-150 ${navigation.state === "loading" ? "opacity-40 pointer-events-none" : "opacity-100"}`}>
-        <Suspense fallback={<TransactionSkeleton />}>
-          <Await resolve={Promise.all([transactions, recurring])}>
-            {([resolvedTx, resolvedRecurring]) => {
-              // Group by date label
-              const visibleTx = resolvedTx.filter((tx) => !hiddenIds.has(String(tx.id)));
+          {(() => {
+              const visibleTx = transactions.filter((tx) => !hiddenIds.has(String(tx.id)));
               const map = new Map<string, any[]>();
               for (const tx of visibleTx) {
                 const key = formatRelativeDay(tx.date);
@@ -216,20 +188,14 @@ export default function TransaksiPage() {
                 map.get(key)!.push(tx);
               }
               const grouped = Array.from(map.entries());
-              const visibleRecurring = resolvedRecurring.filter((rt) => !hiddenRecurringIds.has(rt.id));
-
+              const visibleRecurring = recurring.filter((rt) => !hiddenRecurringIds.has(rt.id));
+              const hasActiveFilter = filters.q || filters.category !== "all" || filters.type !== "all" || filters.from || filters.to;
               return (
                 <>
                   <GlassCard className="p-[18px] md:p-[22px] lg:p-[26px] mt-3.5">
                     {grouped.length === 0 ? (
                       <div className="text-center py-12 px-4 text-brand-text-mute text-[13px]">
-                        {filters.q ||
-                        filters.category !== "all" ||
-                        filters.type !== "all" ||
-                        filters.from ||
-                        filters.to
-                          ? STR.txEmpty
-                          : STR.txEmptyAll}
+                        {hasActiveFilter ? STR.txEmpty : STR.txEmptyAll}
                       </div>
                     ) : (
                       grouped.map(([dateLabel, txs]) => (
@@ -342,9 +308,7 @@ export default function TransaksiPage() {
                   )}
                 </>
               );
-            }}
-          </Await>
-        </Suspense>
+          })()}
         </div>
       </div>
 
