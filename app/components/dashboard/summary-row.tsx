@@ -13,7 +13,7 @@ export type SummaryData = {
   expenseDelta: number; // percent
   balance: number;
   receivedToday: number;
-  accounts: { name: string; amount: number; color: "violet" | "accent" }[];
+  accounts: { id: string; name: string; amount: number; color: "violet" | "accent" }[];
   income: number;
   incomeDelta: number; // percent
   incomeTrend: number[];
@@ -38,7 +38,7 @@ export function SummaryRow({
     <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-[1.2fr_1fr_1fr] gap-3 md:gap-3.5 lg:gap-4.5 mb-3.5 md:mb-4 lg:mb-4.5 relative">
       {/* Hero — Total expenses */}
       <GlassCard
-        className={`p-[18px] md:p-[22px] lg:p-[26px] overflow-hidden md:col-span-2 lg:col-span-1 ${
+        className={`tour-summary p-[18px] md:p-[22px] lg:p-[26px] overflow-hidden md:col-span-2 lg:col-span-1 ${
           dark
             ? "bg-[linear-gradient(135deg,rgba(52,245,160,0.12),rgba(167,139,250,0.10)_60%,rgba(22,24,32,0.62))] border-[rgba(52,245,160,0.22)]"
             : "bg-[linear-gradient(135deg,rgba(14,159,110,0.10),rgba(92,108,219,0.06)_60%,rgba(255,255,255,0.85))] border-[rgba(14,159,110,0.18)]"
@@ -123,9 +123,9 @@ export function SummaryRow({
           </span>
         </div>
         <div className="flex gap-2 mt-4">
-          {data.accounts.map((a) => (
+          {data.accounts.map((a, i) => (
             <div
-              key={a.name}
+              key={a.id}
               className="flex-1 p-2.5 md:px-3 rounded-xl bg-brand-surface-2 border border-brand-hairline"
             >
               <div className="flex items-center gap-1.25 mb-0.75">

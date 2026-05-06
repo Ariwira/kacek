@@ -25,7 +25,7 @@ export function BottomNav() {
           to={to}
           end={end}
           className={({ isActive }) =>
-            `flex-1 flex flex-col items-center justify-center gap-0.75 min-h-[56px] px-1 py-1.5 no-underline rounded-xl transition-all min-w-[44px] min-h-[44px] ${
+            `tour-nav-${to.replace("/", "") || "home"} flex-1 flex flex-col items-center justify-center gap-0.75 min-h-[56px] px-1 py-1.5 no-underline rounded-xl transition-all min-w-[44px] min-h-[44px] ${
               isActive ? "text-brand-accent bg-brand-accent-soft" : "text-brand-text-dim hover:text-brand-text"
             }`
           }

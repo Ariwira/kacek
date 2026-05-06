@@ -204,7 +204,7 @@ export function AnalyticsAndForm({
       </GlassCard>
 
       {/* Form — desktop only; mobile uses the FAB */}
-      <GlassCard className="p-[18px] md:p-[22px] lg:p-[26px] relative hidden lg:block">
+      <GlassCard className="tour-desktop-form p-[18px] md:p-[22px] lg:p-[26px] relative hidden lg:block">
         <div className="absolute -top-10 -right-10 w-[180px] h-[180px] rounded-full bg-[radial-gradient(circle,var(--violet)_33%,transparent_70%)] blur-[24px] pointer-events-none opacity-20" />
         <div className="relative">
           <TransactionForm T={{} as any} dark={dark} mode="add" />

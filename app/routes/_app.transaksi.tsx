@@ -178,7 +178,7 @@ export default function TransaksiPage() {
 
         <FilterBar userCategories={userCategories} theme={theme} />
 
-        <div className={`transition-opacity duration-150 ${navigation.state === "loading" ? "opacity-40 pointer-events-none" : "opacity-100"}`}>
+        <div className={`tour-tx-list transition-opacity duration-150 ${navigation.state === "loading" ? "opacity-40 pointer-events-none" : "opacity-100"}`}>
           {(() => {
               const visibleTx = transactions.filter((tx) => !hiddenIds.has(String(tx.id)));
               const map = new Map<string, any[]>();

@@ -15,6 +15,7 @@ import { BellIcon } from "~/components/icons";
 import { CheckIcon } from "~/components/icons-extra";
 import { formatIDR } from "~/lib/format";
 import { useFetcher } from "react-router";
+import { OnboardingTour } from "~/components/onboarding-tour";
 
 export async function loader({ request }: Route.LoaderArgs) {
   try {
@@ -114,6 +115,7 @@ export default function AppLayout() {
 
   return (
     <>
+      <OnboardingTour dark={theme === "dark"} />
       <Outlet />
       <FAB onClick={() => setAddOpen(true)} dark={theme === "dark"} />
       <BottomNav />

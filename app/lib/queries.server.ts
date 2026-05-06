@@ -56,32 +56,34 @@ export const formatYYYYMM = (d: Date = new Date()) =>
  * If not, creates a default "Dompet Utama" and links existing transactions.
  */
 export async function ensureUserAccounts(userId: string) {
-  const existing = await db.select().from(accounts).where(eq(accounts.userId, userId));
-  if (existing.length > 0) return existing;
+  return await db.transaction(async (tx) => {
+    const existing = await tx.select().from(accounts).where(eq(accounts.userId, userId));
+    if (existing.length > 0) return existing;
 
-  // Create default account
-  const accountId = crypto.randomUUID();
-  await db.insert(accounts).values({
-    id: accountId,
-    userId,
-    name: "Dompet Utama",
-    type: "cash",
-    balance: 0,
+    // Create default account
+    const accountId = crypto.randomUUID();
+    await tx.insert(accounts).values({
+      id: accountId,
+      userId,
+      name: "Dompet Utama",
+      type: "cash",
+      balance: 0,
+    });
+
+    // Link existing transactions to this account
+    await tx
+      .update(transactions)
+      .set({ accountId })
+      .where(and(eq(transactions.userId, userId), sql`account_id IS NULL`));
+    
+    // Link recurring too
+    await tx
+      .update(recurringTransactions)
+      .set({ accountId })
+      .where(and(eq(recurringTransactions.userId, userId), sql`account_id IS NULL`));
+
+    return tx.select().from(accounts).where(eq(accounts.userId, userId));
   });
-
-  // Link existing transactions to this account
-  await db
-    .update(transactions)
-    .set({ accountId })
-    .where(and(eq(transactions.userId, userId), sql`account_id IS NULL`));
-  
-  // Link recurring too
-  await db
-    .update(recurringTransactions)
-    .set({ accountId })
-    .where(and(eq(recurringTransactions.userId, userId), sql`account_id IS NULL`));
-
-  return db.select().from(accounts).where(eq(accounts.userId, userId));
 }
 
 export async function getDashboardData(
@@ -147,6 +149,7 @@ export async function getDashboardData(
   }
 
   let totalExpensesForRange = 0;
+  let totalExpensesThisMonthNet = 0;
   let prevTotalExpenses = 0;
   let totalIncomeThisMonth = 0;
   let totalIncomePrevMonth = 0;
@@ -169,23 +172,67 @@ export async function getDashboardData(
   for (const r of rows) {
     const occurred = r.occurredAt as unknown as Date;
     const amt = r.amount;
-    const isExpense = r.type === "expense";
 
     if (r.type === "income") {
       lifetimeIncome += amt;
-      if (occurred >= monthStart) totalIncomeThisMonth += amt;
-      else if (occurred >= prevMonthStart && occurred <= prevMonthEnd) totalIncomePrevMonth += amt;
+      
+      // If it's real income (salary, etc.), add to monthly income stats
+      if (r.category === "income") {
+        if (occurred >= monthStart) totalIncomeThisMonth += amt;
+        else if (occurred >= prevMonthStart && occurred <= prevMonthEnd) totalIncomePrevMonth += amt;
+      } else {
+        // If it's income but NOT in income category (e.g. refund), subtract from expenses
+        if (occurred >= monthStart) {
+          totalExpensesThisMonthNet -= amt;
+        }
+
+        if (occurred >= rangeStart) {
+          totalExpensesForRange -= amt;
+          const existing = breakdownMap.get(r.category);
+          breakdownMap.set(r.category, {
+            amt: (existing?.amt ?? 0) - amt,
+            name: r.catName ?? undefined,
+            icon: r.catIcon ?? undefined,
+            color: r.catColor ?? undefined,
+          });
+        } else if (occurred >= prevRangeStart && occurred <= prevRangeEnd) {
+          prevTotalExpenses -= amt;
+        }
+      }
       
       if (occurred >= todayStart) receivedToday += amt;
-      if (occurred >= sevenDayStart) netThisWeek += amt;
+      if (occurred >= sevenDayStart) {
+        netThisWeek += amt;
+        if (r.category !== "income") {
+          last7Total -= amt;
+          const dayIdx =
+            6 -
+            Math.floor(
+              (todayStart.getTime() -
+                new Date(
+                  occurred.getFullYear(),
+                  occurred.getMonth(),
+                  occurred.getDate(),
+                ).getTime()) /
+                (1000 * 60 * 60 * 24),
+            );
+          if (dayIdx >= 0 && dayIdx <= 6) last7Days[dayIdx] -= amt;
+        }
+      }
 
-      // Weekly Trend logic
+      // Weekly Trend logic: only show "real" income in the trend? 
+      // Or all incoming money? Usually salary trend is more useful.
+      // Let's keep it as all income for the trend to reflect cashflow.
       const weekIdx = 11 - Math.floor((nowMs - occurred.getTime()) / weekMs);
       if (weekIdx >= 0 && weekIdx <= 11) {
         incomeTrend[weekIdx] += amt;
       }
     } else {
       lifetimeExpense += amt;
+      
+      if (occurred >= monthStart) {
+        totalExpensesThisMonthNet += amt;
+      }
       
       // Breakdown logic (for the selected range)
       if (occurred >= rangeStart) {
@@ -237,8 +284,9 @@ export async function getDashboardData(
       name: info.name,
       icon: info.icon,
       color: info.color,
-      pct: totalExpensesForRange === 0 ? 0 : Math.round((info.amt / totalExpensesForRange) * 100),
+      pct: totalExpensesForRange <= 0 ? 0 : Math.round((info.amt / totalExpensesForRange) * 100),
     }))
+    .filter((d) => d.amt > 0)
     .sort((a, b) => b.amt - a.amt);
 
   const recent: Transaction[] = rows.slice(0, 8).map((r) => ({
@@ -264,14 +312,15 @@ export async function getDashboardData(
 
   return {
     summary: {
-      totalExpenses: rows.filter(r => r.type === 'expense' && (r.occurredAt as unknown as Date) >= monthStart).reduce((s, r) => s + r.amount, 0),
+      totalExpenses: Math.max(0, totalExpensesThisMonthNet),
       budget: budgetSum,
-      last7Total,
-      last7Days,
+      last7Total: Math.max(0, last7Total),
+      last7Days: last7Days.map(v => Math.max(0, v)),
       expenseDelta,
       balance,
       receivedToday,
       accounts: userAccounts.slice(0, 2).map((a, i) => ({
+        id: a.id,
         name: a.name,
         amount: a.balance,
         color: i === 0 ? "violet" : "accent",
@@ -281,7 +330,7 @@ export async function getDashboardData(
       incomeTrend,
     },
     breakdown,
-    totalForRange: totalExpensesForRange,
+    totalForRange: Math.max(0, totalExpensesForRange),
     expenseDelta,
     recent,
     totalCount: rows.length,

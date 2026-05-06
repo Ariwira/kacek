@@ -177,7 +177,7 @@ export default function ProfilPage() {
           </div>
 
           <div className="flex flex-col gap-6">
-            <section>
+            <section className="tour-wallet">
               <div className="flex justify-between items-center mb-3 px-1">
                 <h2 className="text-sm font-bold text-brand-text-mute uppercase tracking-widest m-0">Dompet Aktif</h2>
                 <button 

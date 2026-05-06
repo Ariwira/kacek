@@ -1,7 +1,7 @@
 import { createCookieSessionStorage, redirect } from "react-router";
 import bcrypt from "bcryptjs";
 import { db } from "./db.server";
-import { users } from "~/db/schema";
+import { users, accounts } from "~/db/schema";
 import { eq } from "drizzle-orm";
 
 const SESSION_SECRET = process.env.SESSION_SECRET;
@@ -82,7 +82,20 @@ export async function register({
   }
   const passwordHash = await bcrypt.hash(password, 10);
   const id = crypto.randomUUID();
-  await db.insert(users).values({ id, email, passwordHash, name });
+  
+  await db.transaction(async (tx) => {
+    await tx.insert(users).values({ id, email, passwordHash, name });
+    
+    // Create default account for new user
+    await tx.insert(accounts).values({
+      id: crypto.randomUUID(),
+      userId: id,
+      name: "Dompet Utama",
+      type: "cash",
+      balance: 0,
+    });
+  });
+
   return { userId: id };
 }
 

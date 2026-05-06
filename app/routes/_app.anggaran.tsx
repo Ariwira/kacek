@@ -135,71 +135,73 @@ export default function AnggaranPage() {
                   </GlassCard>
 
                   {/* Budget cards */}
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-xs text-brand-text-mute font-semibold uppercase tracking-wider">Kategori</span>
-                    <button
-                      type="button"
-                      onClick={() => setShowAddCat(true)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-brand-accent/40 bg-brand-accent/10 text-brand-accent text-xs font-semibold hover:bg-brand-accent/20 transition-all"
-                    >
-                      <PlusIcon size={12} />
-                      Tambah Kategori
-                    </button>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-3.5 lg:gap-4">
-                    {items.map((b: any) => {
-                      const pColor = progressColor(b.pct);
-                      const cColor = THEMES[theme].catColor(b.color || b.category);
-                      return (
-                        <GlassCard key={b.category} className="p-[18px] md:p-[22px] lg:p-[26px]">
-                          <div className="flex items-center gap-2.5 mb-3">
-                            <div
-                              className="w-[34px] h-[34px] rounded-xl grid place-items-center border"
-                              style={{
-                                background: `color-mix(in srgb, ${cColor} 12%, transparent)`,
-                                color: cColor,
-                                borderColor: `color-mix(in srgb, ${cColor} 20%, transparent)`,
-                              }}
+                  <div className="tour-budget">
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-xs text-brand-text-mute font-semibold uppercase tracking-wider">Kategori</span>
+                      <button
+                        type="button"
+                        onClick={() => setShowAddCat(true)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-brand-accent/40 bg-brand-accent/10 text-brand-accent text-xs font-semibold hover:bg-brand-accent/20 transition-all"
+                      >
+                        <PlusIcon size={12} />
+                        Tambah Kategori
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-3.5 lg:gap-4">
+                      {items.map((b: any) => {
+                        const pColor = progressColor(b.pct);
+                        const cColor = THEMES[theme].catColor(b.color || b.category);
+                        return (
+                          <GlassCard key={b.category} className="p-[18px] md:p-[22px] lg:p-[26px]">
+                            <div className="flex items-center gap-2.5 mb-3">
+                              <div
+                                className="w-[34px] h-[34px] rounded-xl grid place-items-center border"
+                                style={{
+                                  background: `color-mix(in srgb, ${cColor} 12%, transparent)`,
+                                  color: cColor,
+                                  borderColor: `color-mix(in srgb, ${cColor} 20%, transparent)`,
+                                }}
+                              >
+                                <CatIcon cat={b.icon || b.category} size={16} />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="text-sm font-bold text-brand-text whitespace-nowrap overflow-hidden text-ellipsis">
+                                  {b.name || STR.cat[b.category as CategoryKey]}
+                                </div>
+                                <div className="text-[11px] text-brand-text-mute">
+                                  {STR.budgetUsed(b.pct)}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="font-mono text-lg font-semibold text-brand-text mb-0.5">
+                              {formatIDR(b.spent)}
+                            </div>
+                            <div className="font-mono text-xs text-brand-text-dim mb-2.5">
+                              / {formatIDR(b.budget)}
+                            </div>
+                            <div className="h-1.5 rounded-full bg-brand-track overflow-hidden mb-3">
+                              <div
+                                className="h-full rounded-full transition-all"
+                                style={{
+                                  width: `${Math.min(100, b.pct)}%`,
+                                  background: pColor,
+                                  boxShadow: dark ? `0 0 8px ${pColor}99` : "none",
+                                }}
+                              />
+                            </div>
+                            <button
+                              type="button"
+                              className="w-full px-3 py-2.25 rounded-xl border border-brand-hairline bg-brand-surface-2 text-brand-text-dim text-xs font-semibold cursor-pointer font-sans min-h-[44px]"
+                              onClick={() =>
+                                setEditing({ category: b.category, name: b.name, budget: b.budget })
+                              }
                             >
-                              <CatIcon cat={b.icon || b.category} size={16} />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="text-sm font-bold text-brand-text whitespace-nowrap overflow-hidden text-ellipsis">
-                                {b.name || STR.cat[b.category as CategoryKey]}
-                              </div>
-                              <div className="text-[11px] text-brand-text-mute">
-                                {STR.budgetUsed(b.pct)}
-                              </div>
-                            </div>
-                          </div>
-                          <div className="font-mono text-lg font-semibold text-brand-text mb-0.5">
-                            {formatIDR(b.spent)}
-                          </div>
-                          <div className="font-mono text-xs text-brand-text-dim mb-2.5">
-                            / {formatIDR(b.budget)}
-                          </div>
-                          <div className="h-1.5 rounded-full bg-brand-track overflow-hidden mb-3">
-                            <div
-                              className="h-full rounded-full transition-all"
-                              style={{
-                                width: `${Math.min(100, b.pct)}%`,
-                                background: pColor,
-                                boxShadow: dark ? `0 0 8px ${pColor}99` : "none",
-                              }}
-                            />
-                          </div>
-                          <button
-                            type="button"
-                            className="w-full px-3 py-2.25 rounded-xl border border-brand-hairline bg-brand-surface-2 text-brand-text-dim text-xs font-semibold cursor-pointer font-sans min-h-[44px]"
-                            onClick={() =>
-                              setEditing({ category: b.category, name: b.name, budget: b.budget })
-                            }
-                          >
-                            {STR.budgetEdit}
-                          </button>
-                        </GlassCard>
-                      );
-                    })}
+                              {STR.budgetEdit}
+                            </button>
+                          </GlassCard>
+                        );
+                      })}
+                    </div>
                   </div>
                 </>
               );
