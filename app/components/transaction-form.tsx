@@ -101,9 +101,12 @@ function TransactionFormInner(props: {
   
   useEffect(() => {
     if (fetcher.state === "idle" && fetcher.data?.success) {
+      if (isRecurring) {
+        showToast("Transaksi dicatat & jadwal rutin dibuat!", { type: "success" });
+      }
       onFormSuccess?.();
     }
-  }, [fetcher.state, fetcher.data, onFormSuccess]);
+  }, [fetcher.state, fetcher.data, onFormSuccess, isRecurring, showToast]);
 
   useEffect(() => {
     if (catFetcher.state === "idle" && catFetcher.data?.success) {
@@ -1070,7 +1073,9 @@ function TransactionFormInner(props: {
             ? "Menyimpan…"
             : isEdit
               ? "Simpan perubahan"
-              : STR.addTransactionBtn}
+              : isRecurring
+                ? "Catat & Jadwalkan Rutin"
+                : STR.addTransactionBtn}
         </button>
       </div>
     </fetcher.Form>

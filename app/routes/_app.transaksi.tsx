@@ -232,9 +232,14 @@ export default function TransaksiPage() {
 
                   {visibleRecurring.length > 0 && (
                     <div className="mt-8 mb-4">
-                      <h2 className="text-lg font-bold text-brand-text mb-3">
-                        Transaksi Rutin
-                      </h2>
+                      <div className="mb-3">
+                        <h2 className="text-lg font-bold text-brand-text">
+                          Transaksi Rutin
+                        </h2>
+                        <p className="text-xs text-brand-text-mute mt-0.5">
+                          Jadwal otomatis — transaksi hari ini sudah tercatat di atas
+                        </p>
+                      </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         {visibleRecurring.map((rt) => (
                           <GlassCard key={rt.id} className="p-4 flex items-center gap-3">
