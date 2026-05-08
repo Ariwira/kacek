@@ -101,12 +101,12 @@ function TransactionFormInner(props: {
   
   useEffect(() => {
     if (fetcher.state === "idle" && fetcher.data?.success) {
-      if (isRecurring) {
+      if (fetcher.data.recurring) {
         showToast("Transaksi dicatat & jadwal rutin dibuat!", { type: "success" });
       }
       onFormSuccess?.();
     }
-  }, [fetcher.state, fetcher.data, onFormSuccess, isRecurring, showToast]);
+  }, [fetcher.state, fetcher.data, onFormSuccess, showToast]);
 
   useEffect(() => {
     if (catFetcher.state === "idle" && catFetcher.data?.success) {

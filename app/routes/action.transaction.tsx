@@ -127,7 +127,7 @@ export async function action({ request }: Route.ActionArgs) {
       });
     }
 
-    return { success: true };
+    return { success: true, recurring: parsed.data.isRecurring === "on" };
   } catch (err) {
     console.error("Database error:", err);
     return { error: "Gagal menyimpan transaksi ke database." };
