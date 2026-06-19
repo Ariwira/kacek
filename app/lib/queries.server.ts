@@ -21,7 +21,7 @@ import { formatIDR } from "~/lib/format";
 const DEFAULT_BUDGET_TOTAL = 32_000_000;
 
 export const DEFAULT_BUDGET_BY_CAT: Record<
-  Exclude<CategoryKey, "income">,
+  Exclude<CategoryKey, "income" | "transfer">,
   number
 > = {
   food: 5_000_000,
@@ -173,6 +173,10 @@ export async function getDashboardData(
     const occurred = r.occurredAt as unknown as Date;
     const amt = r.amount;
 
+    if (r.type === "transfer") {
+      continue;
+    }
+
     if (r.type === "income") {
       lifetimeIncome += amt;
       
@@ -298,7 +302,7 @@ export async function getDashboardData(
     catColor: r.catColor ?? undefined,
     date: r.occurredAt as unknown as Date,
     amount: r.amount,
-    type: r.type as "expense" | "income",
+    type: r.type as any,
     receiptUrl: r.receiptUrl,
     accountId: r.accountId as string,
   }));
@@ -364,6 +368,7 @@ export async function listTransactions(
       occurredAt: transactions.occurredAt,
       createdAt: transactions.createdAt,
       accountId: transactions.accountId,
+      transferToAccountId: transactions.transferToAccountId,
       catName: categoriesTable.name,
       catIcon: categoriesTable.icon,
       catColor: categoriesTable.color,
@@ -378,7 +383,7 @@ export async function listTransactions(
   }
   if (filters.type && filters.type !== "all") {
     conditions.push(
-      eq(transactions.type, filters.type as "expense" | "income"),
+      eq(transactions.type, filters.type as any),
     );
   }
   if (filters.from) {
@@ -407,7 +412,7 @@ export async function listTransactions(
   return rows.map((r) => ({
     id: r.id,
     amount: r.amount,
-    type: r.type as "expense" | "income",
+    type: r.type as any,
     cat: r.cat as CategoryKey,
     catName: r.catName ?? undefined,
     catIcon: r.catIcon ?? undefined,
@@ -416,6 +421,7 @@ export async function listTransactions(
     receiptUrl: r.receiptUrl,
     date: r.occurredAt,
     accountId: r.accountId,
+    transferToAccountId: r.transferToAccountId,
   }));
 }
 

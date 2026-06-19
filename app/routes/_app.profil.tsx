@@ -94,9 +94,11 @@ export default function ProfilPage() {
   const { showToast } = useToast();
   
   const [accOpen, setAccOpen] = useState(false);
+  const [transferOpen, setTransferOpen] = useState(false);
   const [confirmModal, setConfirmModal] = useState<{ isOpen: boolean; type: "delete" | "reactivate" | null; id: string; name: string }>({ isOpen: false, type: null, id: "", name: "" });
 
   const nameFetcher = useFetcher();
+  const transferFetcher = useFetcher();
   const passwordFetcher = useFetcher();
   const accFetcher = useFetcher();
   const actionFetcher = useFetcher();
@@ -110,6 +112,15 @@ export default function ProfilPage() {
     if (data?.success) showToast(data.success, { type: "success" });
     if (data?.error) showToast(data.error, { type: "error" });
   }, [nameFetcher.data, showToast]);
+
+  useEffect(() => {
+    const data = transferFetcher.data as { success?: string; error?: string } | undefined;
+    if (data?.success) {
+      showToast(data.success, { type: "success" });
+      setTransferOpen(false);
+    }
+    if (data?.error) showToast(data.error, { type: "error" });
+  }, [transferFetcher.data, showToast]);
 
   useEffect(() => {
     const data = passwordFetcher.data as { success?: string; error?: string } | undefined;
@@ -197,12 +208,22 @@ export default function ProfilPage() {
             <section className="tour-wallet">
               <div className="flex justify-between items-center mb-3 px-1">
                 <h2 className="text-sm font-bold text-brand-text-mute uppercase tracking-widest m-0">Dompet Aktif</h2>
-                <button 
-                  onClick={() => setAccOpen(true)}
-                  className="px-3 py-1.5 rounded-lg bg-brand-accent-soft text-brand-accent text-[11px] font-bold border-none cursor-pointer flex items-center gap-1 active:scale-95 transition-all"
-                >
-                  <PlusIcon size={12} /> Tambah
-                </button>
+                <div className="flex gap-2">
+                  {accounts.length > 1 && (
+                    <button 
+                      onClick={() => setTransferOpen(true)}
+                      className="px-3 py-1.5 rounded-lg bg-brand-surface-2 text-brand-text text-[11px] font-bold border border-brand-hairline cursor-pointer flex items-center gap-1 active:scale-95 transition-all"
+                    >
+                      Pindah Saldo
+                    </button>
+                  )}
+                  <button 
+                    onClick={() => setAccOpen(true)}
+                    className="px-3 py-1.5 rounded-lg bg-brand-accent-soft text-brand-accent text-[11px] font-bold border-none cursor-pointer flex items-center gap-1 active:scale-95 transition-all"
+                  >
+                    <PlusIcon size={12} /> Tambah
+                  </button>
+                </div>
               </div>
               <div className="flex flex-col gap-3 mb-6">
                 {accounts.length === 0 ? (
@@ -389,6 +410,15 @@ export default function ProfilPage() {
         title="Tambah Dompet Baru"
       >
         <TambahDompetForm fetcher={accFetcher} formRef={accFormRef} theme={theme} />
+      </BottomSheet>
+
+      {/* Transfer Form Bottom Sheet */}
+      <BottomSheet 
+        open={transferOpen} 
+        onClose={() => setTransferOpen(false)}
+        title="Pindah Saldo (Transfer)"
+      >
+        <TransferForm fetcher={transferFetcher} accounts={accounts} onClose={() => setTransferOpen(false)} theme={theme} />
       </BottomSheet>
 
       {/* Confirmation Modal */}
@@ -602,9 +632,7 @@ function TambahDompetForm({
                   setType(t.id);
                   setOpen(false);
                 }}
-                className={`w-full px-3.5 py-2.5 text-left text-sm flex items-center gap-2 transition-colors ${
-                  isSel ? "bg-brand-accent/10 text-brand-accent font-bold" : "text-brand-text hover:bg-brand-surface-2 font-medium"
-                }`}
+                className="w-full px-3.5 py-2.5 text-left text-sm flex items-center gap-2 transition-colors text-brand-text hover:bg-brand-surface-2 font-medium"
               >
                 <TIcon size={16} />
                 {t.name}
@@ -614,6 +642,137 @@ function TambahDompetForm({
         </div>,
         document.body
       )}
+    </fetcher.Form>
+  );
+}
+
+function TransferForm({
+  fetcher,
+  accounts,
+  onClose,
+  theme,
+}: {
+  fetcher: any;
+  accounts: any[];
+  onClose: () => void;
+  theme: "dark" | "light";
+}) {
+  const [fromAccountId, setFromAccountId] = useState(accounts[0]?.id || "");
+  const [toAccountId, setToAccountId] = useState(accounts[1]?.id || "");
+
+  const [displayAmount, setDisplayAmount] = useState("");
+  const [rawAmount, setRawAmount] = useState("");
+
+  const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value.replace(/\D/g, "");
+    setRawAmount(value);
+    if (!value) {
+      setDisplayAmount("");
+      return;
+    }
+    const formatted = new Intl.NumberFormat("id-ID").format(parseInt(value));
+    setDisplayAmount(formatted);
+  };
+
+  // Ensure from and to accounts are not the same when selected
+  const handleFromChange = (id: string) => {
+    setFromAccountId(id);
+    if (id === toAccountId) {
+      const other = accounts.find((a) => a.id !== id);
+      if (other) setToAccountId(other.id);
+    }
+  };
+
+  const handleToChange = (id: string) => {
+    setToAccountId(id);
+    if (id === fromAccountId) {
+      const other = accounts.find((a) => a.id !== id);
+      if (other) setFromAccountId(other.id);
+    }
+  };
+
+  return (
+    <fetcher.Form method="post" action="/action/transfer" className="flex flex-col gap-4 p-1">
+      <div className="grid grid-cols-2 gap-3">
+        <label className="flex flex-col gap-1.5">
+          <span className="text-[10.5px] font-bold text-brand-text-mute uppercase tracking-wider">Dari Dompet</span>
+          <select
+            name="fromAccountId"
+            value={fromAccountId}
+            onChange={(e) => handleFromChange(e.target.value)}
+            className="h-12 px-3 rounded-xl bg-brand-input border border-brand-hairline text-brand-text text-sm font-semibold outline-none focus:border-brand-accent transition-all"
+          >
+            {accounts.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.name} ({formatIDR(a.balance)})
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="flex flex-col gap-1.5">
+          <span className="text-[10.5px] font-bold text-brand-text-mute uppercase tracking-wider">Ke Dompet</span>
+          <select
+            name="toAccountId"
+            value={toAccountId}
+            onChange={(e) => handleToChange(e.target.value)}
+            className="h-12 px-3 rounded-xl bg-brand-input border border-brand-hairline text-brand-text text-sm font-semibold outline-none focus:border-brand-accent transition-all"
+          >
+            {accounts.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.name} ({formatIDR(a.balance)})
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <span className="text-[10.5px] font-bold text-brand-text-mute uppercase tracking-wider">Nominal Transfer</span>
+        <div
+          className={`flex items-center px-3.5 py-2 rounded-2xl bg-brand-input border border-brand-accent transition-shadow ${
+            theme === "dark"
+              ? "shadow-[0_0_0_4px_rgba(52,245,160,0.13),0_0_20px_rgba(52,245,160,0.2)]"
+              : "shadow-[0_0_0_4px_rgba(14,159,110,0.1)]"
+          }`}
+        >
+          <span className="font-mono text-xl text-brand-text-dim mr-1.5">Rp</span>
+          <input
+            type="text"
+            inputMode="numeric"
+            value={displayAmount}
+            onChange={handleAmountChange}
+            placeholder="0"
+            required
+            className="font-mono text-2xl font-bold text-brand-text tracking-[-0.5px] bg-transparent border-none outline-none w-full py-2"
+          />
+          <input type="hidden" name="amount" value={rawAmount} />
+        </div>
+      </div>
+
+      <label className="flex flex-col gap-1.5">
+        <span className="text-[10.5px] font-bold text-brand-text-mute uppercase tracking-wider">Catatan</span>
+        <input
+          name="note"
+          type="text"
+          placeholder="Transfer"
+          className="h-12 px-3.5 rounded-xl bg-brand-input border border-brand-hairline text-brand-text text-sm font-medium outline-none focus:border-brand-accent transition-all"
+        />
+      </label>
+
+      <button
+        type="submit"
+        disabled={fetcher.state !== "idle"}
+        className={`mt-2 flex-1 px-4.5 py-3.25 rounded-2xl border-none cursor-pointer font-bold text-sm tracking-wide font-sans flex items-center justify-center gap-2 transition-all min-h-[44px] bg-gradient-to-br from-brand-accent to-brand-violet ${
+          fetcher.state !== "idle" ? "wait opacity-70" : "opacity-100"
+        } ${
+          theme === "dark"
+            ? "text-[#06180F] shadow-[0_10px_28px_rgba(52,245,160,0.33),0_0_0_1px_rgba(52,245,160,0.4)_inset]"
+            : "text-white shadow-[0_10px_24px_rgba(14,159,110,0.27)]"
+        }`}
+      >
+        {fetcher.state !== "idle" ? "Mengirim..." : "Kirim Transfer"}
+      </button>
     </fetcher.Form>
   );
 }

@@ -11,7 +11,8 @@ export type CategoryKey =
   | "education"
   | "gift"
   | "investment"
-  | "other";
+  | "other"
+  | "transfer";
 
 export type ThemeTokens = {
   bg: string;
@@ -97,6 +98,7 @@ export const THEMES: Record<Theme, ThemeTokens> = {
         gift: "#FB923C",
         investment: "#C084FC",
         other: "#94A3B8",
+        transfer: "#60D5FF",
       })[k] || CUSTOM_COLORS.find(c => c.key === k)?.dark || "#A78BFA",
   },
   light: {
@@ -134,6 +136,7 @@ export const THEMES: Record<Theme, ThemeTokens> = {
         gift: "#EA580C",
         investment: "#7C3AED",
         other: "#64748B",
+        transfer: "#0EA5E9",
       })[k] || CUSTOM_COLORS.find(c => c.key === k)?.light || "#5C6CDB",
   },
 };

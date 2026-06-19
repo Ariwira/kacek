@@ -182,6 +182,15 @@ export const OtherIcon = makeIcon(
   </>
 );
 
+export const TransferIcon = makeIcon(
+  <>
+    <path d="m17 2 4 4-4 4" />
+    <path d="M3 11v-1a4 4 0 0 1 4-4h14" />
+    <path d="m7 22-4-4 4-4" />
+    <path d="M21 13v1a4 4 0 0 1-4 4H3" />
+  </>
+);
+
 export const CameraIcon = makeIcon(<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z M12 13a3 3 0 1 0 0 6 3 3 0 0 0 0-6z" />);
 export const GlobeIcon = makeIcon(<>
   <circle cx="12" cy="12" r="10" />
@@ -240,6 +249,7 @@ const CAT_ICON_MAP: Record<string, (p: IconProps) => ReactElement> = {
   gift: GiftIcon,
   investment: InvestIcon,
   other: OtherIcon,
+  transfer: TransferIcon,
   // Custom friendly
   coffee: CoffeeIcon,
   cart: CartIcon,

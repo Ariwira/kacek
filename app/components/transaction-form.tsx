@@ -31,7 +31,7 @@ const CATEGORY_OPTIONS: CategoryKey[] = [
 export type TransactionFormDefaults = {
   id?: string;
   amount?: number;
-  type?: "expense" | "income";
+  type?: "expense" | "income" | "transfer";
   category?: CategoryKey;
   accountId?: string;
   note?: string;
@@ -146,7 +146,7 @@ function TransactionFormInner(props: {
   const [catOpen, setCatOpen] = useState(false);
   const [accOpen, setAccOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState(todayISO);
-  const [txType, setTxType] = useState<"expense" | "income">(hideIncome ? "expense" : (defaults?.type ?? "expense"));
+  const [txType, setTxType] = useState<"expense" | "income" | "transfer">(hideIncome ? "expense" : ((defaults?.type as any) ?? "expense"));
   const [isRecurring, setIsRecurring] = useState(false);
   const [editingCatObj, setEditingCatObj] = useState<{
     id: string;
@@ -692,7 +692,13 @@ function TransactionFormInner(props: {
               {scanMenu}
             </div>
           )}
-          <TypeToggle value={txType} onChange={setTxType} hideIncome={hideIncome} />
+          {txType === "transfer" ? (
+            <div className="px-3 py-1.5 rounded-xl bg-brand-surface-2 text-brand-text-dim border border-brand-hairline text-[11px] font-bold">
+              Pindah Saldo
+            </div>
+          ) : (
+            <TypeToggle value={txType} onChange={setTxType} hideIncome={hideIncome} />
+          )}
         </div>
       ) : (
         <>
@@ -733,7 +739,13 @@ function TransactionFormInner(props: {
                 </>
               )}
             </div>
-            <TypeToggle value={txType} onChange={setTxType} hideIncome={hideIncome} />
+            {txType === "transfer" ? (
+              <div className="px-3 py-1.5 rounded-xl bg-brand-surface-2 text-brand-text-dim border border-brand-hairline text-[11px] font-bold">
+                Pindah Saldo
+              </div>
+            ) : (
+              <TypeToggle value={txType} onChange={setTxType} hideIncome={hideIncome} />
+            )}
           </div>
           <div className="text-xs text-brand-text-dim mb-4.5">
             {isScanning ? "Menganalisis teks pada struk belanja Anda..." : STR.addTransactionTagline}
@@ -1095,26 +1107,32 @@ function TransactionFormInner(props: {
             Hapus
           </button>
         )}
-        <button
-          type="submit"
-          disabled={submitting}
-          className={`flex-1 px-4.5 py-3.25 rounded-2xl border-none cursor-pointer font-bold text-sm tracking-wide font-sans flex items-center justify-center gap-2 transition-all min-h-[44px] bg-gradient-to-br from-brand-accent to-brand-violet ${
-            submitting ? "wait opacity-70" : "opacity-100"
-          } ${
-            dark
-              ? "text-[#06180F] shadow-[0_10px_28px_rgba(52,245,160,0.33),0_0_0_1px_rgba(52,245,160,0.4)_inset]"
-              : "text-white shadow-[0_10px_24px_rgba(14,159,110,0.27)]"
-          }`}
-        >
-          {isEdit ? <CheckIcon size={15} /> : <PlusIcon size={15} />}
-          {submitting
-            ? "Menyimpan…"
-            : isEdit
-              ? "Simpan perubahan"
-              : isRecurring
-                ? "Catat & Jadwalkan Rutin"
-                : STR.addTransactionBtn}
-        </button>
+        {txType === "transfer" ? (
+          <div className="flex-1 text-center py-2.5 px-3.5 rounded-xl bg-brand-surface-2 border border-brand-hairline text-brand-text-dim text-[11.5px] leading-normal font-semibold">
+            Transaksi transfer hanya dapat dihapus. Silakan gunakan menu Profil untuk membuat transfer baru.
+          </div>
+        ) : (
+          <button
+            type="submit"
+            disabled={submitting}
+            className={`flex-1 px-4.5 py-3.25 rounded-2xl border-none cursor-pointer font-bold text-sm tracking-wide font-sans flex items-center justify-center gap-2 transition-all min-h-[44px] bg-gradient-to-br from-brand-accent to-brand-violet ${
+              submitting ? "wait opacity-70" : "opacity-100"
+            } ${
+              dark
+                ? "text-[#06180F] shadow-[0_10px_28px_rgba(52,245,160,0.33),0_0_0_1px_rgba(52,245,160,0.4)_inset]"
+                : "text-white shadow-[0_10px_24px_rgba(14,159,110,0.27)]"
+            }`}
+          >
+            {isEdit ? <CheckIcon size={15} /> : <PlusIcon size={15} />}
+            {submitting
+              ? "Menyimpan…"
+              : isEdit
+                ? "Simpan perubahan"
+                : isRecurring
+                  ? "Catat & Jadwalkan Rutin"
+                  : STR.addTransactionBtn}
+          </button>
+        )}
       </div>
     </fetcher.Form>
 

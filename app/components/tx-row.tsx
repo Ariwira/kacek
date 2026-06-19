@@ -12,9 +12,10 @@ export type Transaction = {
   catColor?: string;
   date: Date | string;
   amount: number;
-  type: "expense" | "income";
+  type: "expense" | "income" | "transfer";
   receiptUrl?: string | null;
   accountId?: string | null;
+  transferToAccountId?: string | null;
 };
 
 export function TxRow({
@@ -69,10 +70,11 @@ export function TxRow({
       </div>
       <div
         className={`text-right font-mono text-[15px] font-bold ${
-          isIncome ? "text-brand-accent" : "text-brand-text"
+          tx.type === "transfer" ? "" : isIncome ? "text-brand-accent" : "text-brand-text"
         }`}
+        style={tx.type === "transfer" ? { color: cColor } : undefined}
       >
-        {isIncome ? "+" : "−"}
+        {tx.type === "transfer" ? "⇄ " : isIncome ? "+" : "−"}
         {formatIDR(Math.abs(tx.amount))}
       </div>
     </>

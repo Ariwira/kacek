@@ -67,10 +67,12 @@ export const transactions = sqliteTable("transactions", {
   goalId: text("goal_id")
     .references(() => goals.id, { onDelete: "set null" }), // Link transaction to a goal (e.g. contribution/refund)
   amount: integer("amount").notNull(), // rupiah, no decimals
-  type: text("type", { enum: ["expense", "income"] }).notNull(),
+  type: text("type", { enum: ["expense", "income", "transfer"] }).notNull(),
   category: text("category").notNull(),
   note: text("note"),
   receiptUrl: text("receipt_url"), // Path to uploaded file
+  transferToAccountId: text("transfer_to_account_id")
+    .references(() => accounts.id, { onDelete: "set null" }),
   occurredAt: integer("occurred_at", { mode: "timestamp" }).notNull(),
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()

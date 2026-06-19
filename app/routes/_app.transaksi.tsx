@@ -92,7 +92,7 @@ export default function TransaksiPage() {
   const [editing, setEditing] = useState<{
     id: string;
     amount: number;
-    type: "expense" | "income";
+    type: "expense" | "income" | "transfer";
     category: CategoryKey;
     note: string;
     date: string;

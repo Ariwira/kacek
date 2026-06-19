@@ -37,4 +37,5 @@ export default [
   route("action/logout", "routes/action.logout.tsx"),
   route("action/notification/read", "routes/action.notification.read.tsx"),
   route("action/category", "routes/action.category.tsx"),
+  route("action/transfer", "routes/action.transfer.tsx"),
 ] satisfies RouteConfig;

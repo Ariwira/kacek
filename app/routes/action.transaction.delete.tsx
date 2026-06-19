@@ -15,7 +15,24 @@ export async function action({ request, params }: Route.ActionArgs) {
   if (!tx) return { error: "Transaksi tidak ditemukan." };
 
   // 2. Reverse balance change (including when accountId is null — skip gracefully)
-  if (tx.accountId) {
+  if (tx.type === "transfer") {
+    if (tx.accountId) {
+      await db
+        .update(accounts)
+        .set({
+          balance: sql`${accounts.balance} + ${tx.amount}`
+        })
+        .where(and(eq(accounts.userId, userId), eq(accounts.id, tx.accountId)));
+    }
+    if (tx.transferToAccountId) {
+      await db
+        .update(accounts)
+        .set({
+          balance: sql`${accounts.balance} - ${tx.amount}`
+        })
+        .where(and(eq(accounts.userId, userId), eq(accounts.id, tx.transferToAccountId)));
+    }
+  } else if (tx.accountId) {
     const balanceChange = tx.type === "income" ? -tx.amount : tx.amount;
     await db
       .update(accounts)

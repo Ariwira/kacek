@@ -126,6 +126,7 @@ export const STR = {
     gift: "Hadiah/Donasi",
     investment: "Investasi",
     other: "Lainnya",
+    transfer: "Pindah Saldo",
   },
 };
 
