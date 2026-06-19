@@ -77,6 +77,12 @@ export async function action({ request }: Route.ActionArgs) {
     return { success: "Kata sandi berhasil diperbarui" };
   }
 
+  if (intent === "toggle-hide-income") {
+    const hideIncome = formData.get("hideIncome") === "true";
+    await db.update(users).set({ hideIncome }).where(eq(users.id, userId));
+    return { success: hideIncome ? "Mode Tanpa Pemasukan diaktifkan" : "Mode Tanpa Pemasukan dinonaktifkan" };
+  }
+
   return null;
 }
 
@@ -94,6 +100,7 @@ export default function ProfilPage() {
   const passwordFetcher = useFetcher();
   const accFetcher = useFetcher();
   const actionFetcher = useFetcher();
+  const settingsFetcher = useFetcher();
 
   const passwordFormRef = useRef<HTMLFormElement>(null);
   const accFormRef = useRef<HTMLFormElement>(null);
@@ -124,6 +131,12 @@ export default function ProfilPage() {
   }, [accFetcher.data, showToast]);
 
   useEffect(() => {
+    const data = settingsFetcher.data as { success?: string; error?: string } | undefined;
+    if (data?.success) showToast(data.success, { type: "success" });
+    if (data?.error) showToast(data.error, { type: "error" });
+  }, [settingsFetcher.data, showToast]);
+
+  useEffect(() => {
     const data = actionFetcher.data as { success?: string; error?: string } | undefined;
     if (actionFetcher.state === "idle" && confirmModal.isOpen && data) {
         if (data.success) {
@@ -137,6 +150,10 @@ export default function ProfilPage() {
     }
   }, [actionFetcher.data, actionFetcher.state, showToast]);
 
+
+  const isHideIncome = settingsFetcher.formData 
+    ? settingsFetcher.formData.get("hideIncome") === "true"
+    : stats.hideIncome || false;
 
   const initials = (stats.name || stats.email).substring(0, 2).toUpperCase();
 
@@ -252,6 +269,37 @@ export default function ProfilPage() {
                   </div>
                 </>
               )}
+            </section>
+
+            <section>
+              <h2 className="text-sm font-bold text-brand-text-mute uppercase tracking-widest mb-3 px-1 mt-6">Pengaturan Tampilan</h2>
+              <GlassCard className="p-6">
+                <div className="flex justify-between items-center gap-4">
+                  <div>
+                    <h3 className="text-sm font-bold m-0">Mode Tanpa Pemasukan</h3>
+                    <p className="text-xs text-brand-text-dim mt-1 leading-relaxed">
+                      Sembunyikan semua fitur pemasukan. Hanya tampilkan pengeluaran dan anggaran.
+                    </p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                    <input 
+                      type="checkbox" 
+                      className="sr-only peer" 
+                      checked={isHideIncome}
+                      onChange={(e) => {
+                        settingsFetcher.submit(
+                          { 
+                            intent: "toggle-hide-income", 
+                            hideIncome: (!isHideIncome).toString() 
+                          }, 
+                          { method: "post" }
+                        );
+                      }}
+                    />
+                    <div className="w-11 h-6 bg-brand-surface-2 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-brand-text after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-accent"></div>
+                  </label>
+                </div>
+              </GlassCard>
             </section>
 
             <section>

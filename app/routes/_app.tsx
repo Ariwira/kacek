@@ -23,7 +23,12 @@ export async function loader({ request }: Route.LoaderArgs) {
 
     // Critical data: User profile must be fetched first
     const user = await db
-      .select({ id: users.id, email: users.email, name: users.name })
+      .select({
+        id: users.id,
+        email: users.email,
+        name: users.name,
+        hideIncome: users.hideIncome,
+      })
       .from(users)
       .where(eq(users.id, userId))
       .then(rows => rows[0] || null)
