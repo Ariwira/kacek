@@ -9,7 +9,7 @@ import {
   CameraIcon,
   ImageIcon,
 } from "~/components/icons";
-import { CheckIcon, TrashIcon, AlertTriangleIcon, ChevronDownIcon } from "~/components/icons-extra";
+import { CheckIcon, TrashIcon, AlertTriangleIcon, ChevronDownIcon, EditIcon } from "~/components/icons-extra";
 import { DatePicker } from "~/components/date-picker";
 import { usePortalContainer } from "~/components/bottom-sheet";
 import { NUM, type CategoryKey, type ThemeTokens, CUSTOM_COLORS, THEMES } from "~/components/theme";
@@ -116,6 +116,7 @@ function TransactionFormInner(props: {
     if (catFetcher.state === "idle" && catFetcher.data?.success) {
       setShowAddCat(false);
       setNewCatName("");
+      setEditingCatObj(null);
     }
   }, [catFetcher.state, catFetcher.data]);
 
@@ -147,6 +148,12 @@ function TransactionFormInner(props: {
   const [selectedDate, setSelectedDate] = useState(todayISO);
   const [txType, setTxType] = useState<"expense" | "income">(hideIncome ? "expense" : (defaults?.type ?? "expense"));
   const [isRecurring, setIsRecurring] = useState(false);
+  const [editingCatObj, setEditingCatObj] = useState<{
+    id: string;
+    name: string;
+    icon: string;
+    color: string;
+  } | null>(null);
 
   useEffect(() => {
     if (hideIncome && txType !== "expense") {
@@ -932,27 +939,48 @@ function TransactionFormInner(props: {
                 <>
                   <div className="px-3 py-1.5 mt-1 text-[10px] font-bold text-brand-text-mute uppercase tracking-wider border-t border-brand-hairline pt-3">Kustom</div>
                   {customCategories.map((c) => (
-                    <button
-                      key={c.id}
-                      type="button"
-                      onClick={() => {
-                        setSelectedCat(c.id);
-                        setCatOpen(false);
-                      }}
-                      className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-brand-surface-2 transition-colors text-left"
+                    <div 
+                      key={c.id} 
+                      className="w-full flex items-center hover:bg-brand-surface-2 transition-colors group/row"
                     >
-                      <span
-                        className="w-5 h-5 rounded-md grid place-items-center"
-                        style={{
-                          background: `color-mix(in srgb, ${T.catColor(c.color)} 13%, transparent)`,
-                          color: T.catColor(c.color),
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedCat(c.id);
+                          setCatOpen(false);
                         }}
+                        className="flex-1 flex items-center gap-3 px-3 py-2.5 text-left bg-transparent border-none cursor-pointer"
                       >
-                        <CatIcon cat={c.icon} size={12} />
-                      </span>
-                      <span className="text-sm font-medium text-brand-text">{c.name}</span>
-                      {selectedCat === c.id && <CheckIcon size={14} className="ml-auto text-brand-accent" />}
-                    </button>
+                        <span
+                          className="w-5 h-5 rounded-md grid place-items-center"
+                          style={{
+                            background: `color-mix(in srgb, ${T.catColor(c.color)} 13%, transparent)`,
+                            color: T.catColor(c.color),
+                          }}
+                        >
+                          <CatIcon cat={c.icon} size={12} />
+                        </span>
+                        <span className="text-sm font-medium text-brand-text">{c.name}</span>
+                        {selectedCat === c.id && <CheckIcon size={14} className="ml-auto text-brand-accent mr-1" />}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setCatOpen(false);
+                          setEditingCatObj({
+                            id: c.id,
+                            name: c.name,
+                            icon: c.icon,
+                            color: c.color,
+                          });
+                        }}
+                        className="w-8 h-8 rounded-lg text-brand-text-mute hover:text-brand-text hover:bg-brand-surface-3 border-none cursor-pointer grid place-items-center mr-2 transition-colors"
+                        title="Edit Kategori"
+                      >
+                        <EditIcon size={12} />
+                      </button>
+                    </div>
                   ))}
                 </>
               )}
@@ -1171,6 +1199,97 @@ function TransactionFormInner(props: {
                 className="w-full h-12 rounded-xl bg-brand-accent text-brand-bg font-bold shadow-lg shadow-brand-accent/20 active:scale-[0.98] transition-all disabled:opacity-50"
               >
                 {catFetcher.state !== "idle" ? "Menyimpan..." : "Buat Kategori"}
+              </button>
+            </div>
+          </catFetcher.Form>
+        </div>
+      </div>,
+      portalContainer!
+    )}
+
+    {editingCatObj && createPortal(
+      <div className="fixed inset-0 z-[10000] flex items-end sm:items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-[overlayIn_0.2s_ease-out]" style={{ pointerEvents: "auto" }}>
+        <div className="w-full max-w-[400px] bg-brand-surface-solid rounded-3xl border border-brand-hairline shadow-2xl p-6 animate-[sheetIn_0.3s_ease-out]">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-lg font-bold text-brand-text">Edit Kategori</h3>
+            <button type="button" onClick={() => setEditingCatObj(null)} className="p-2 -mr-2 text-brand-text-mute hover:text-brand-text">
+              <PlusIcon size={20} className="rotate-45" />
+            </button>
+          </div>
+          
+          <catFetcher.Form method="post" action="/action/category">
+            <input type="hidden" name="intent" value="update" />
+            <input type="hidden" name="id" value={editingCatObj.id} />
+            
+            <div className="space-y-5">
+              <div>
+                <Lab>Nama Kategori</Lab>
+                <input
+                  name="name"
+                  autoFocus
+                  required
+                  placeholder="cth: Skin Care"
+                  defaultValue={editingCatObj.name}
+                  className="w-full h-11 px-4 rounded-xl bg-brand-input border border-brand-hairline text-sm font-medium focus:border-brand-accent outline-none"
+                />
+              </div>
+              
+              <div>
+                <Lab>Ikon</Lab>
+                <div className="grid grid-cols-6 gap-2">
+                  {CUSTOM_ICONS
+                    .filter(i => !CATEGORY_OPTIONS.includes(i.key as any) && (!customCategories.some(existing => existing.icon === i.key) || i.key === editingCatObj.icon))
+                    .map(i => (
+                      <button
+                        key={i.key}
+                        type="button"
+                        onClick={() => setEditingCatObj(prev => prev ? { ...prev, icon: i.key } : null)}
+                        className={`aspect-square rounded-xl grid place-items-center border-2 transition-all ${
+                          editingCatObj.icon === i.key ? 'border-brand-accent bg-brand-accent/10 text-brand-accent' : 'border-brand-hairline text-brand-text-dim hover:border-brand-text-mute'
+                        }`}
+                      >
+                        <i.Icon size={18} />
+                      </button>
+                    ))
+                  }
+                  <input type="hidden" name="icon" value={editingCatObj.icon} />
+                </div>
+              </div>
+
+              <div>
+                <Lab>Warna</Lab>
+                <div className="grid grid-cols-6 gap-2">
+                  {CUSTOM_COLORS
+                    .filter(c => {
+                      const defaultColors = ["emerald", "violet", "blue", "rose"];
+                      return !defaultColors.includes(c.key) && (!customCategories.some(existing => existing.color === c.key) || c.key === editingCatObj.color);
+                    })
+                    .map(c => (
+                      <button
+                        key={c.key}
+                        type="button"
+                        onClick={() => setEditingCatObj(prev => prev ? { ...prev, color: c.key } : null)}
+                        className={`aspect-square rounded-xl p-1 border-2 transition-all ${
+                          editingCatObj.color === c.key ? 'border-brand-accent' : 'border-transparent'
+                        }`}
+                      >
+                        <div 
+                          className="w-full h-full rounded-lg"
+                          style={{ background: dark ? c.dark : c.light }}
+                        />
+                      </button>
+                    ))
+                  }
+                  <input type="hidden" name="color" value={editingCatObj.color} />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={catFetcher.state !== "idle"}
+                className="w-full h-12 rounded-xl bg-brand-accent text-brand-bg font-bold shadow-lg shadow-brand-accent/20 active:scale-[0.98] transition-all disabled:opacity-50"
+              >
+                {catFetcher.state !== "idle" ? "Menyimpan..." : "Simpan Perubahan"}
               </button>
             </div>
           </catFetcher.Form>
