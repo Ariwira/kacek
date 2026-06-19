@@ -1,6 +1,6 @@
 import { useRouteLoaderData } from "react-router";
 import { GlassCard } from "~/components/glass-card";
-import { ArrowUpRight } from "~/components/icons";
+import { ArrowUpRight, ArrowDownRight } from "~/components/icons";
 import { Sparkline } from "~/components/sparkline";
 import { NUM, type Theme, type ThemeTokens } from "~/components/theme";
 import { STR } from "~/lib/i18n";
@@ -33,6 +33,7 @@ export function SummaryRow({
     | undefined;
   const hideIncome = appData?.user?.hideIncome ?? false;
 
+  const isExpenseUp = data.expenseDelta >= 0;
   const dark = theme === "dark";
   const max = Math.max(1, ...data.last7Days);
   const budgetPct = Math.min(
@@ -69,8 +70,15 @@ export function SummaryRow({
               {formatIDR(data.totalExpenses)}
             </div>
           </div>
-          <span className="inline-flex items-center gap-1 px-2.25 py-1 rounded-full bg-brand-red-soft text-brand-red text-[11.5px] font-semibold">
-            <ArrowUpRight size={11} /> +{data.expenseDelta.toFixed(1)}%
+          <span 
+            className={`inline-flex items-center gap-1 px-2.25 py-1 rounded-full text-[11.5px] font-semibold ${
+              isExpenseUp 
+                ? "bg-brand-red-soft text-brand-red" 
+                : "bg-brand-accent-soft text-brand-accent"
+            }`}
+          >
+            {isExpenseUp ? <ArrowUpRight size={11} /> : <ArrowDownRight size={11} />}
+            {isExpenseUp ? "+" : ""}{data.expenseDelta.toFixed(1)}%
           </span>
         </div>
 
