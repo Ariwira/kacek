@@ -24,7 +24,7 @@ export const users = sqliteTable("users", {
   email: text("email").notNull().unique(),
   passwordHash: text("password_hash").notNull(),
   name: text("name"),
-  hideIncome: integer("hide_income", { mode: "boolean" }).notNull().default(false),
+  hideIncome: integer("hide_income", { mode: "boolean" }).default(false),
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
     .$defaultFn(() => new Date()),
