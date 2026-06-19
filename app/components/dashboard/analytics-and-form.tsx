@@ -71,7 +71,7 @@ export function AnalyticsAndForm({
             </div>
             <div className="text-xs text-brand-text-dim mt-0.75">
               {range === "week"
-                ? "7 hari terakhir"
+                ? "Minggu ini (Senin - Hari ini)"
                 : range === "year"
                   ? "Tahun " + new Date().getFullYear()
                   : STR.monthCategoriesCount(breakdown.length, monthNameID())}

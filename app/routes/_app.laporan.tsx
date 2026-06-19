@@ -36,12 +36,7 @@ const DEFAULT_FILTER_CATS: CategoryKey[] = [
   "transport",
   "bills",
   "shopping",
-  "entertainment",
-  "health",
-  "education",
-  "gift",
-  "investment",
-  "other",
+  "income",
 ];
 
 export default function LaporanPage() {
@@ -60,12 +55,14 @@ export default function LaporanPage() {
 
   // Re-map category lists for filtering
   const allCategories = useMemo(() => {
-    const list: { key: string; label: string; icon: string; color: string }[] = DEFAULT_FILTER_CATS.map((c) => ({
-      key: c,
-      label: STR.cat[c] || c,
-      icon: c,
-      color: c,
-    }));
+    const list: { key: string; label: string; icon: string; color: string }[] = DEFAULT_FILTER_CATS
+      .filter((c) => !hideIncome || c !== "income")
+      .map((c) => ({
+        key: c,
+        label: STR.cat[c] || c,
+        icon: c,
+        color: c,
+      }));
     userCategories.forEach((c) => {
       list.push({
         key: c.id,
@@ -75,7 +72,7 @@ export default function LaporanPage() {
       });
     });
     return list;
-  }, [userCategories]);
+  }, [userCategories, hideIncome]);
 
   // Handle category chip click
   const toggleCategoryFilter = (catKey: string) => {
