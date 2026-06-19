@@ -448,6 +448,7 @@ export async function getUserStats(userId: string) {
     joinedAt: user.createdAt,
     name: user.name,
     email: user.email,
+    hideIncome: user.hideIncome,
   };
 }
 

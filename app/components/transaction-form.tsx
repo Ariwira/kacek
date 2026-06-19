@@ -50,14 +50,16 @@ export function TransactionForm(props: {
   onFormSuccess?: () => void;
 }) {
   const appData = useRouteLoaderData("routes/_app") as
-    | { accounts: any[]; categories: Category[] }
+    | { accounts: any[]; categories: Category[]; user?: { hideIncome?: boolean } }
     | undefined;
+  const hideIncome = appData?.user?.hideIncome ?? false;
 
   return (
     <TransactionFormInner
       {...props}
       accountsList={appData?.accounts ?? []}
       customCategories={appData?.categories ?? []}
+      hideIncome={hideIncome}
     />
   );
 }
@@ -73,6 +75,7 @@ function TransactionFormInner(props: {
   onFormSuccess?: () => void;
   accountsList: any[];
   customCategories: Category[];
+  hideIncome: boolean;
 }) {
   const {
     dark,
@@ -84,6 +87,7 @@ function TransactionFormInner(props: {
     onFormSuccess,
     accountsList,
     customCategories,
+    hideIncome,
   } = props;
 
   const fetcher = useFetcher();
@@ -141,8 +145,14 @@ function TransactionFormInner(props: {
   const [catOpen, setCatOpen] = useState(false);
   const [accOpen, setAccOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState(todayISO);
-  const [txType, setTxType] = useState<"expense" | "income">(defaults?.type ?? "expense");
+  const [txType, setTxType] = useState<"expense" | "income">(hideIncome ? "expense" : (defaults?.type ?? "expense"));
   const [isRecurring, setIsRecurring] = useState(false);
+
+  useEffect(() => {
+    if (hideIncome && txType !== "expense") {
+      setTxType("expense");
+    }
+  }, [hideIncome, txType]);
   
   const filteredCategoryOptions = CATEGORY_OPTIONS.filter(c => txType === "expense" ? c !== "income" : c === "income");
 
@@ -675,7 +685,7 @@ function TransactionFormInner(props: {
               {scanMenu}
             </div>
           )}
-          <TypeToggle value={txType} onChange={setTxType} />
+          <TypeToggle value={txType} onChange={setTxType} hideIncome={hideIncome} />
         </div>
       ) : (
         <>
@@ -716,7 +726,7 @@ function TransactionFormInner(props: {
                 </>
               )}
             </div>
-            <TypeToggle value={txType} onChange={setTxType} />
+            <TypeToggle value={txType} onChange={setTxType} hideIncome={hideIncome} />
           </div>
           <div className="text-xs text-brand-text-dim mb-4.5">
             {isScanning ? "Menganalisis teks pada struk belanja Anda..." : STR.addTransactionTagline}
@@ -1175,10 +1185,15 @@ function TransactionFormInner(props: {
 function TypeToggle({
   value,
   onChange,
+  hideIncome,
 }: {
   value: "expense" | "income";
   onChange: (v: "expense" | "income") => void;
+  hideIncome?: boolean;
 }) {
+  if (hideIncome) {
+    return <input type="hidden" name="type" value="expense" />;
+  }
   return (
     <div className="flex gap-1 p-0.75 rounded-full bg-brand-surface-2 border border-brand-hairline text-[11px] font-bold">
       <label className="relative cursor-pointer">

@@ -491,6 +491,11 @@ function FilterBar({
   userCategories: any[];
   theme: Theme;
 }) {
+  const appData = useRouteLoaderData("routes/_app") as
+    | { user?: { hideIncome?: boolean } }
+    | undefined;
+  const hideIncome = appData?.user?.hideIncome ?? false;
+
   const [searchParams] = useSearchParams();
   const navigation = useNavigation();
 
@@ -516,9 +521,11 @@ function FilterBar({
 
   const categoryList: { key: string; label: string; icon?: string; color?: string }[] = [
     { key: "all", label: STR.filterAll },
-    ...DEFAULT_ACTIVE_CATS.map(c => ({ key: c, label: STR.cat[c] })),
+    ...DEFAULT_ACTIVE_CATS.filter(c => !hideIncome || c !== "income").map(c => ({ key: c, label: STR.cat[c] })),
     ...userCategories.map(c => ({ key: c.id, label: c.name, icon: c.icon, color: c.color })),
   ];
+
+  const typeOptions = TYPE_OPTIONS.filter(opt => !hideIncome || opt.value !== "income");
 
   return (
     <div className="flex flex-col gap-2.5 mt-3">
@@ -552,28 +559,30 @@ function FilterBar({
       </Form>
 
       {/* Type tabs — active state uses useSearchParams for instant feedback */}
-      <div
-        className="flex gap-1 p-0.75 rounded-full bg-brand-surface-2 border border-brand-hairline self-start max-w-full"
-        role="radiogroup"
-        aria-label="Tipe transaksi"
-      >
-        {TYPE_OPTIONS.map((opt) => {
-          const active = currentType === opt.value;
-          return (
-            <Link
-              key={opt.value}
-              to={buildHref({ type: opt.value })}
-              className={`px-3.5 py-1.25 rounded-full text-[11.5px] font-semibold no-underline whitespace-nowrap transition-all ${
-                active
-                  ? "bg-brand-surface-solid text-brand-text"
-                  : "text-brand-text-dim hover:text-brand-text"
-              }`}
-            >
-              {opt.label}
-            </Link>
-          );
-        })}
-      </div>
+      {!hideIncome && (
+        <div
+          className="flex gap-1 p-0.75 rounded-full bg-brand-surface-2 border border-brand-hairline self-start max-w-full"
+          role="radiogroup"
+          aria-label="Tipe transaksi"
+        >
+          {typeOptions.map((opt) => {
+            const active = currentType === opt.value;
+            return (
+              <Link
+                key={opt.value}
+                to={buildHref({ type: opt.value })}
+                className={`px-3.5 py-1.25 rounded-full text-[11.5px] font-semibold no-underline whitespace-nowrap transition-all ${
+                  active
+                    ? "bg-brand-surface-solid text-brand-text"
+                    : "text-brand-text-dim hover:text-brand-text"
+                }`}
+              >
+                {opt.label}
+              </Link>
+            );
+          })}
+        </div>
+      )}
 
       {/* Category chips — active state uses useSearchParams for instant feedback */}
       <div className="flex flex-nowrap gap-2 overflow-x-auto scrollbar-none items-center py-2 px-1 -mx-1 w-[calc(100%+8px)]">
