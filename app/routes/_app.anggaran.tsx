@@ -15,11 +15,12 @@ import {
 import { Header } from "~/components/dashboard/header";
 import { GlassCard } from "~/components/glass-card";
 import { CatIcon, CUSTOM_ICONS, PlusIcon } from "~/components/icons";
-import { CheckIcon } from "~/components/icons-extra";
+import { CheckIcon, EditIcon, TrashIcon } from "~/components/icons-extra";
 import { BottomSheet } from "~/components/bottom-sheet";
 import { STR } from "~/lib/i18n";
 import { formatIDR, monthNameID } from "~/lib/format";
 import { TransactionSkeleton } from "~/components/skeletons";
+import { useToast } from "~/components/toast";
 
 export async function loader({ request }: Route.LoaderArgs) {
   const userId = await requireUserId(request);
@@ -51,6 +52,7 @@ export default function AnggaranPage() {
   const T = THEMES[theme];
   const dark = theme === "dark";
   const customCategories: any[] = appData?.categories ?? [];
+  const { showToast } = useToast();
 
   const [editing, setEditing] = useState<{
     category: CategoryKey;
@@ -58,6 +60,29 @@ export default function AnggaranPage() {
     budget: number;
   } | null>(null);
   const [showAddCat, setShowAddCat] = useState(false);
+
+  const [editingCategory, setEditingCategory] = useState<{
+    id: string;
+    name: string;
+    icon: string;
+    color: string;
+  } | null>(null);
+
+  const [confirmDeleteCategory, setConfirmDeleteCategory] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
+
+  const categoryDeleteFetcher = useFetcher();
+
+  useEffect(() => {
+    if (categoryDeleteFetcher.state === "idle" && categoryDeleteFetcher.data?.success) {
+      showToast("Kategori berhasil dihapus", { type: "success" });
+      setConfirmDeleteCategory(null);
+    } else if (categoryDeleteFetcher.state === "idle" && categoryDeleteFetcher.data?.error) {
+      showToast(categoryDeleteFetcher.data.error, { type: "error" });
+    }
+  }, [categoryDeleteFetcher.state, categoryDeleteFetcher.data, showToast]);
 
   return (
     <div className="kc-bg-gradient min-h-screen p-4 md:p-6 lg:p-7 pb-24 md:pb-8 lg:pb-7 text-brand-text font-sans">
@@ -151,6 +176,8 @@ export default function AnggaranPage() {
                       {items.map((b: any) => {
                         const pColor = progressColor(b.pct);
                         const cColor = THEMES[theme].catColor(b.color || b.category);
+                        const customCatObj = customCategories.find((c) => c.id === b.category);
+                        const isCustom = !!customCatObj;
                         return (
                           <GlassCard key={b.category} className="p-[18px] md:p-[22px] lg:p-[26px]">
                             <div className="flex items-center gap-2.5 mb-3">
@@ -172,6 +199,38 @@ export default function AnggaranPage() {
                                   {STR.budgetUsed(b.pct)}
                                 </div>
                               </div>
+                              {isCustom && customCatObj && (
+                                <div className="flex gap-1.5 shrink-0">
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setEditingCategory({
+                                        id: customCatObj.id,
+                                        name: customCatObj.name,
+                                        icon: customCatObj.icon,
+                                        color: customCatObj.color,
+                                      })
+                                    }
+                                    className="w-7 h-7 rounded-lg bg-brand-surface-2 text-brand-text-dim border border-brand-hairline cursor-pointer grid place-items-center hover:text-brand-text transition-all"
+                                    title="Edit Kategori"
+                                  >
+                                    <EditIcon size={12} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setConfirmDeleteCategory({
+                                        id: customCatObj.id,
+                                        name: customCatObj.name,
+                                      })
+                                    }
+                                    className="w-7 h-7 rounded-lg bg-brand-red-soft text-brand-red border-none cursor-pointer grid place-items-center hover:bg-brand-red hover:text-white transition-all"
+                                    title="Hapus Kategori"
+                                  >
+                                    <TrashIcon size={12} />
+                                  </button>
+                                </div>
+                              )}
                             </div>
                             <div className="font-mono text-lg font-semibold text-brand-text mb-0.5">
                               {formatIDR(b.spent)}
@@ -236,6 +295,60 @@ export default function AnggaranPage() {
           customCategories={customCategories}
           onDone={() => setShowAddCat(false)}
         />
+      </BottomSheet>
+
+      <BottomSheet
+        open={!!editingCategory}
+        onClose={() => setEditingCategory(null)}
+        title={`Edit Kategori · ${editingCategory ? editingCategory.name : ""}`}
+      >
+        {editingCategory && (
+          <EditCategoryForm
+            dark={dark}
+            customCategories={customCategories}
+            category={editingCategory}
+            onDone={() => {
+              setEditingCategory(null);
+              showToast("Kategori berhasil diperbarui", { type: "success" });
+            }}
+          />
+        )}
+      </BottomSheet>
+
+      <BottomSheet 
+        open={!!confirmDeleteCategory} 
+        onClose={() => setConfirmDeleteCategory(null)}
+        title="Hapus Kategori"
+      >
+        {confirmDeleteCategory && (
+          <div className="p-4 pt-1 flex flex-col gap-6">
+            <p className="text-brand-text text-sm leading-relaxed m-0 text-center">
+              Apakah Anda yakin ingin menghapus kategori <strong>"{confirmDeleteCategory.name}"</strong>?
+              Semua transaksi dan transaksi rutin yang menggunakan kategori ini akan dialihkan ke kategori bawaan <strong>"Lainnya"</strong>, dan anggaran terkait akan dihapus.
+            </p>
+            <div className="flex gap-3">
+              <button 
+                onClick={() => setConfirmDeleteCategory(null)}
+                className="flex-1 h-12 rounded-xl bg-brand-surface-2 text-brand-text font-bold text-sm border border-brand-hairline cursor-pointer"
+                disabled={categoryDeleteFetcher.state !== "idle"}
+              >
+                Batal
+              </button>
+              <button 
+                onClick={() => {
+                  categoryDeleteFetcher.submit(
+                    { intent: "delete", id: confirmDeleteCategory.id },
+                    { method: "post", action: "/action/category" }
+                  );
+                }}
+                disabled={categoryDeleteFetcher.state !== "idle"}
+                className="flex-1 h-12 rounded-xl font-bold text-sm border-none cursor-pointer flex items-center justify-center bg-brand-red text-white"
+              >
+                 {categoryDeleteFetcher.state !== "idle" ? "Menghapus..." : "Ya, Hapus"}
+              </button>
+            </div>
+          </div>
+        )}
       </BottomSheet>
     </div>
   );
@@ -451,6 +564,118 @@ function AddCategoryForm({
       >
         <CheckIcon size={15} />
         {fetcher.state !== "idle" ? "Menyimpan…" : "Buat Kategori"}
+      </button>
+    </fetcher.Form>
+  );
+}
+
+function EditCategoryForm({
+  dark,
+  customCategories,
+  category,
+  onDone,
+}: {
+  dark: boolean;
+  customCategories: any[];
+  category: { id: string; name: string; icon: string; color: string };
+  onDone: () => void;
+}) {
+  const fetcher = useFetcher();
+  const [name, setName] = useState(category.name);
+  const [icon, setIcon] = useState(category.icon);
+  const [color, setColor] = useState(category.color);
+
+  useEffect(() => {
+    if (fetcher.state === "idle" && fetcher.data?.success) {
+      onDone();
+    }
+  }, [fetcher.state, fetcher.data]);
+
+  const usedIcons = new Set(
+    customCategories.filter((c) => c.id !== category.id).map((c) => c.icon)
+  );
+  const usedColors = new Set(
+    customCategories.filter((c) => c.id !== category.id).map((c) => c.color)
+  );
+
+  return (
+    <fetcher.Form method="post" action="/action/category" className="space-y-5">
+      <input type="hidden" name="intent" value="update" />
+      <input type="hidden" name="id" value={category.id} />
+      
+      <div>
+        <label className="block text-[10.5px] font-bold text-brand-text-mute uppercase tracking-wider mb-1.5">
+          Nama Kategori
+        </label>
+        <input
+          name="name"
+          autoFocus
+          required
+          placeholder="cth: Skin Care, Hobi"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          className="w-full h-11 px-4 rounded-xl bg-brand-input border border-brand-hairline text-sm font-medium focus:border-brand-accent outline-none text-brand-text transition-all"
+        />
+      </div>
+
+      <div>
+        <label className="block text-[10.5px] font-bold text-brand-text-mute uppercase tracking-wider mb-1.5">
+          Ikon
+        </label>
+        <div className="grid grid-cols-6 gap-2">
+          {CUSTOM_ICONS.filter((i) => !usedIcons.has(i.key) || i.key === category.icon).map((i) => (
+            <button
+              key={i.key}
+              type="button"
+              onClick={() => setIcon(i.key)}
+              className={`aspect-square rounded-xl grid place-items-center border-2 transition-all ${
+                icon === i.key
+                  ? "border-brand-accent bg-brand-accent/10 text-brand-accent"
+                  : "border-brand-hairline text-brand-text-dim hover:border-brand-text-mute"
+              }`}
+            >
+              <i.Icon size={18} />
+            </button>
+          ))}
+        </div>
+        <input type="hidden" name="icon" value={icon} />
+      </div>
+
+      <div>
+        <label className="block text-[10.5px] font-bold text-brand-text-mute uppercase tracking-wider mb-1.5">
+          Warna
+        </label>
+        <div className="grid grid-cols-6 gap-2">
+          {CUSTOM_COLORS.filter((c) => !usedColors.has(c.key) || c.key === category.color).map((c) => (
+            <button
+              key={c.key}
+              type="button"
+              onClick={() => setColor(c.key)}
+              className={`aspect-square rounded-xl p-1 border-2 transition-all ${
+                color === c.key ? "border-brand-accent" : "border-transparent"
+              }`}
+            >
+              <div
+                className="w-full h-full rounded-lg"
+                style={{ background: dark ? c.dark : c.light }}
+              />
+            </button>
+          ))}
+        </div>
+        <input type="hidden" name="color" value={color} />
+      </div>
+
+      <button
+        type="submit"
+        disabled={fetcher.state !== "idle" || !name.trim()}
+        className={`w-full px-4 py-3 rounded-2xl border-none cursor-pointer font-bold text-sm font-sans flex items-center justify-center gap-2 transition-all min-h-[44px] bg-linear-to-br from-brand-accent to-brand-violet disabled:opacity-50 ${
+          dark
+            ? "text-[#06180F] shadow-[0_10px_24px_rgba(52,245,160,0.33)]"
+            : "text-white shadow-[0_10px_20px_rgba(14,159,110,0.27)]"
+        }`}
+      >
+        <CheckIcon size={15} />
+        {fetcher.state !== "idle" ? "Menyimpan…" : "Simpan Perubahan"}
       </button>
     </fetcher.Form>
   );
