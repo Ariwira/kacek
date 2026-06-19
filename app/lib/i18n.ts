@@ -1,8 +1,14 @@
 export const STR = {
   brand: "KaCek",
   brandTagline: "Personal",
-  nav: ["Ringkasan", "Transaksi", "Anggaran", "Tujuan"] as const,
+  nav: ["Ringkasan", "Transaksi", "Laporan", "Anggaran", "Tujuan"] as const,
   searchPlaceholder: "Cari transaksi…",
+  reportPageTitle: "Laporan Keuangan",
+  reportPageSubtitle: "Ringkasan analisis keuangan Anda",
+  netIncome: "Pendapatan Bersih",
+  totalExpense: "Total Pengeluaran",
+  totalIncome: "Total Pemasukan",
+  exportCsvBtn: "Ekspor CSV",
 
   // Summary cards
   totalExpensesThisMonth: "Total Pengeluaran · Bulan Ini",

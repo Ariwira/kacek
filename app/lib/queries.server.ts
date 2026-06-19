@@ -723,3 +723,198 @@ export async function listGoals(userId: string) {
       desc(goalsTable.createdAt)
     );
 }
+
+export function getReportRanges(period: "week" | "month" | "year") {
+  const now = new Date();
+  let start: Date;
+  let end: Date = new Date(now.getTime());
+  end.setHours(23, 59, 59, 999);
+
+  let prevStart: Date;
+  let prevEnd: Date;
+
+  if (period === "week") {
+    // Current week: Monday of current week to today
+    const day = now.getDay();
+    const diff = now.getDate() - day + (day === 0 ? -6 : 1);
+    start = new Date(now.getFullYear(), now.getMonth(), diff, 0, 0, 0, 0);
+
+    prevStart = new Date(start.getTime());
+    prevStart.setDate(prevStart.getDate() - 7);
+    prevEnd = new Date(start.getTime() - 1);
+  } else if (period === "year") {
+    // Current year: 1 Jan to today
+    start = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
+
+    prevStart = new Date(now.getFullYear() - 1, 0, 1, 0, 0, 0, 0);
+    prevEnd = new Date(now.getFullYear() - 1, 11, 31, 23, 59, 59, 999);
+  } else {
+    // period === "month"
+    // Current month: 1st of month to today
+    start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+
+    prevStart = new Date(now.getFullYear(), now.getMonth() - 1, 1, 0, 0, 0, 0);
+    prevEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+  }
+
+  return { start, end, prevStart, prevEnd };
+}
+
+export async function getReportData(
+  userId: string,
+  period: "week" | "month" | "year",
+  categoryFilterList?: string[]
+) {
+  const { start, end, prevStart, prevEnd } = getReportRanges(period);
+
+  const rows = await db
+    .select({
+      id: transactions.id,
+      amount: transactions.amount,
+      type: transactions.type,
+      category: transactions.category,
+      note: transactions.note,
+      occurredAt: transactions.occurredAt,
+      catName: categoriesTable.name,
+      catIcon: categoriesTable.icon,
+      catColor: categoriesTable.color,
+    })
+    .from(transactions)
+    .leftJoin(categoriesTable, eq(transactions.category, categoriesTable.id))
+    .where(
+      and(
+        eq(transactions.userId, userId),
+        gte(transactions.occurredAt, prevStart),
+        lte(transactions.occurredAt, end)
+      )
+    )
+    .orderBy(asc(transactions.occurredAt));
+
+  let totalExpense = 0;
+  let totalIncome = 0;
+  let prevTotalExpense = 0;
+  let prevTotalIncome = 0;
+
+  const breakdownMap = new Map<string, { amt: number; name?: string; icon?: string; color?: string }>();
+  const txList: any[] = [];
+
+  for (const r of rows) {
+    const occurred = r.occurredAt as Date;
+    const amt = r.amount;
+
+    if (r.type === "transfer") continue;
+
+    // Filter categories if selected
+    const isFiltered = categoryFilterList && categoryFilterList.length > 0 && !categoryFilterList.includes(r.category);
+
+    if (occurred >= start && occurred <= end) {
+      if (isFiltered) continue;
+
+      if (r.type === "income") {
+        totalIncome += amt;
+      } else if (r.type === "expense") {
+        totalExpense += amt;
+        
+        const existing = breakdownMap.get(r.category);
+        breakdownMap.set(r.category, {
+          amt: (existing?.amt ?? 0) + amt,
+          name: r.catName ?? undefined,
+          icon: r.catIcon ?? undefined,
+          color: r.catColor ?? undefined,
+        });
+      }
+
+      txList.push({
+        id: r.id,
+        amount: amt,
+        type: r.type,
+        cat: r.category,
+        catName: r.catName,
+        catIcon: r.catIcon,
+        catColor: r.catColor,
+        note: r.note || "",
+        date: occurred,
+      });
+    } else if (occurred >= prevStart && occurred <= prevEnd) {
+      if (isFiltered) continue;
+
+      if (r.type === "income") {
+        prevTotalIncome += amt;
+      } else if (r.type === "expense") {
+        prevTotalExpense += amt;
+      }
+    }
+  }
+
+  const net = totalIncome - totalExpense;
+  const prevNet = prevTotalIncome - prevTotalExpense;
+
+  const expenseDelta = prevTotalExpense === 0 ? 0 : ((totalExpense - prevTotalExpense) / prevTotalExpense) * 100;
+  const incomeDelta = prevTotalIncome === 0 ? 0 : ((totalIncome - prevTotalIncome) / prevTotalIncome) * 100;
+  const netDelta = prevNet === 0 ? 0 : ((net - prevNet) / Math.abs(prevNet)) * 100;
+
+  const breakdown = Array.from(breakdownMap.entries()).map(([cat, info]) => ({
+    cat: cat as CategoryKey,
+    amt: info.amt,
+    name: info.name,
+    icon: info.icon,
+    color: info.color,
+    pct: totalExpense <= 0 ? 0 : Math.round((info.amt / totalExpense) * 100),
+  })).sort((a, b) => b.amt - a.amt);
+
+  // Generate trend points
+  const trendMap = new Map<string, { label: string; expense: number; income: number }>();
+  if (period === "year") {
+    for (let m = 0; m < 12; m++) {
+      const key = `${start.getFullYear()}-${String(m + 1).padStart(2, "0")}`;
+      const label = new Date(start.getFullYear(), m, 1).toLocaleDateString("id-ID", { month: "short" });
+      trendMap.set(key, { label, expense: 0, income: 0 });
+    }
+  } else {
+    const curr = new Date(start.getTime());
+    while (curr <= end) {
+      const key = curr.toISOString().slice(0, 10);
+      const label = curr.toLocaleDateString("id-ID", { day: "numeric", month: "short" });
+      trendMap.set(key, { label, expense: 0, income: 0 });
+      curr.setDate(curr.getDate() + 1);
+    }
+  }
+
+  for (const r of rows) {
+    const occurred = r.occurredAt as Date;
+    if (occurred >= start && occurred <= end) {
+      if (r.type === "transfer") continue;
+      
+      const isFiltered = categoryFilterList && categoryFilterList.length > 0 && !categoryFilterList.includes(r.category);
+      if (isFiltered) continue;
+
+      let key = "";
+      if (period === "year") {
+        key = `${occurred.getFullYear()}-${String(occurred.getMonth() + 1).padStart(2, "0")}`;
+      } else {
+        key = occurred.toISOString().slice(0, 10);
+      }
+
+      const point = trendMap.get(key);
+      if (point) {
+        if (r.type === "income") {
+          point.income += r.amount;
+        } else if (r.type === "expense") {
+          point.expense += r.amount;
+        }
+      }
+    }
+  }
+
+  return {
+    totalExpense,
+    totalIncome,
+    net,
+    expenseDelta,
+    incomeDelta,
+    netDelta,
+    breakdown,
+    trend: Array.from(trendMap.values()),
+    transactions: txList.sort((a, b) => b.date.getTime() - a.date.getTime()),
+  };
+}

@@ -17,6 +17,7 @@ export default [
     index("routes/_app.dashboard.tsx"),
     route("transaksi", "routes/_app.transaksi.tsx"),
     route("anggaran", "routes/_app.anggaran.tsx"),
+    route("laporan", "routes/_app.laporan.tsx"),
     route("tujuan", "routes/_app.tujuan.tsx"),
     route("profil", "routes/_app.profil.tsx"),
   ]),

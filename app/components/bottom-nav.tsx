@@ -1,6 +1,6 @@
 import type { ReactElement } from "react";
 import { NavLink } from "react-router";
-import { HomeIcon, ListIcon, WalletIcon, TargetIcon } from "./icons-extra";
+import { HomeIcon, ListIcon, WalletIcon, TargetIcon, ChartIcon } from "./icons-extra";
 
 type NavItem = {
   to: string;
@@ -13,6 +13,7 @@ export function BottomNav() {
   const items: NavItem[] = [
     { to: "/", label: "Ringkasan", Icon: HomeIcon, end: true },
     { to: "/transaksi", label: "Transaksi", Icon: ListIcon },
+    { to: "/laporan", label: "Laporan", Icon: ChartIcon },
     { to: "/anggaran", label: "Anggaran", Icon: WalletIcon },
     { to: "/tujuan", label: "Tujuan", Icon: TargetIcon },
   ];
