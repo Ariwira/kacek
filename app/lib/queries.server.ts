@@ -724,7 +724,7 @@ export async function listGoals(userId: string) {
     );
 }
 
-export function getReportRanges(period: "week" | "month" | "year") {
+export function getReportRanges(period: "week" | "month" | "year" | "custom", fromStr?: string | null, toStr?: string | null) {
   const now = new Date();
   let start: Date;
   let end: Date = new Date(now.getTime());
@@ -733,7 +733,18 @@ export function getReportRanges(period: "week" | "month" | "year") {
   let prevStart: Date;
   let prevEnd: Date;
 
-  if (period === "week") {
+  if (period === "custom" && fromStr && toStr) {
+    start = new Date(fromStr);
+    start.setHours(0, 0, 0, 0);
+    end = new Date(toStr);
+    end.setHours(23, 59, 59, 999);
+    
+    const diff = end.getTime() - start.getTime();
+    prevStart = new Date(start.getTime() - diff - (24 * 60 * 60 * 1000));
+    prevStart.setHours(0,0,0,0);
+    prevEnd = new Date(start.getTime() - (24 * 60 * 60 * 1000));
+    prevEnd.setHours(23,59,59,999);
+  } else if (period === "week") {
     // Current week: Monday of current week to today
     const day = now.getDay();
     const diff = now.getDate() - day + (day === 0 ? -6 : 1);
@@ -762,10 +773,12 @@ export function getReportRanges(period: "week" | "month" | "year") {
 
 export async function getReportData(
   userId: string,
-  period: "week" | "month" | "year",
-  categoryFilterList?: string[]
+  period: "week" | "month" | "year" | "custom",
+  categoryFilterList?: string[],
+  fromStr?: string | null,
+  toStr?: string | null
 ) {
-  const { start, end, prevStart, prevEnd } = getReportRanges(period);
+  const { start, end, prevStart, prevEnd } = getReportRanges(period, fromStr, toStr);
 
   const rows = await db
     .select({
@@ -864,11 +877,18 @@ export async function getReportData(
 
   // Generate trend points
   const trendMap = new Map<string, { label: string; expense: number; income: number }>();
-  if (period === "year") {
-    for (let m = 0; m < 12; m++) {
-      const key = `${start.getFullYear()}-${String(m + 1).padStart(2, "0")}`;
-      const label = new Date(start.getFullYear(), m, 1).toLocaleDateString("id-ID", { month: "short" });
+  
+  const diffDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+  const groupMode = period === "year" || diffDays > 60 ? "month" : "day";
+
+  if (groupMode === "month") {
+    let curr = new Date(start.getFullYear(), start.getMonth(), 1);
+    const endDate = new Date(end.getFullYear(), end.getMonth(), 1);
+    while (curr <= endDate) {
+      const key = `${curr.getFullYear()}-${String(curr.getMonth() + 1).padStart(2, "0")}`;
+      const label = curr.toLocaleDateString("id-ID", { month: "short", year: curr.getFullYear() !== start.getFullYear() ? "2-digit" : undefined });
       trendMap.set(key, { label, expense: 0, income: 0 });
+      curr.setMonth(curr.getMonth() + 1);
     }
   } else {
     const curr = new Date(start.getTime());
@@ -889,7 +909,7 @@ export async function getReportData(
       if (isFiltered) continue;
 
       let key = "";
-      if (period === "year") {
+      if (groupMode === "month") {
         key = `${occurred.getFullYear()}-${String(occurred.getMonth() + 1).padStart(2, "0")}`;
       } else {
         key = occurred.toISOString().slice(0, 10);

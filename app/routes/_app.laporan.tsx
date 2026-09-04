@@ -18,12 +18,15 @@ export async function loader({ request }: Route.LoaderArgs) {
   const userId = await requireUserId(request);
   const url = new URL(request.url);
   
-  const period = (url.searchParams.get("period") as "week" | "month" | "year") || "month";
+  const period = (url.searchParams.get("period") as "week" | "month" | "year" | "custom") || "month";
   const catsParam = url.searchParams.get("cats") || "";
   const categoryFilters = catsParam ? catsParam.split(",") : [];
+  
+  const fromStr = url.searchParams.get("from");
+  const toStr = url.searchParams.get("to");
 
   const [reportData, userCategories, stats] = await Promise.all([
-    getReportData(userId, period, categoryFilters),
+    getReportData(userId, period, categoryFilters, fromStr, toStr),
     db.select().from(categoriesTable).where(eq(categoriesTable.userId, userId)),
     getUserStats(userId),
   ]);
@@ -94,9 +97,18 @@ export default function LaporanPage() {
   };
 
   // Toggle period
-  const setPeriod = (p: "week" | "month" | "year") => {
+  const setPeriod = (p: "week" | "month" | "year" | "custom") => {
     const params = new URLSearchParams(searchParams);
     params.set("period", p);
+    
+    // Set default from/to when switching to custom
+    if (p === "custom" && !params.get("from") && !params.get("to")) {
+      const now = new Date();
+      const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+      params.set("from", firstDay.toISOString().slice(0, 10));
+      params.set("to", now.toISOString().slice(0, 10));
+    }
+    
     setSearchParams(params, { preventScrollReset: true });
   };
 
@@ -173,24 +185,52 @@ export default function LaporanPage() {
         </div>
 
         {/* Period Switcher */}
-        <div className="flex gap-1 p-0.75 rounded-full bg-brand-surface-2 border border-brand-hairline self-start mb-6 w-fit">
-          {(["week", "month", "year"] as const).map((p) => {
-            const active = period === p;
-            const label = p === "week" ? "Minggu Ini" : p === "year" ? "Tahun Ini" : "Bulan Ini";
-            return (
-              <button
-                key={p}
-                onClick={() => setPeriod(p)}
-                className={`px-4 py-1.5 rounded-full text-xs font-bold border-none cursor-pointer whitespace-nowrap transition-all ${
-                  active
-                    ? "bg-brand-surface-solid text-brand-text shadow-sm"
-                    : "bg-transparent text-brand-text-dim hover:text-brand-text"
-                }`}
-              >
-                {label}
-              </button>
-            );
-          })}
+        <div className="flex gap-4 items-center flex-wrap self-start mb-6 w-full max-w-full">
+          <div className="flex gap-1 p-0.75 rounded-full bg-brand-surface-2 border border-brand-hairline w-fit">
+            {(["week", "month", "year", "custom"] as const).map((p) => {
+              const active = period === p;
+              const label = p === "week" ? "Minggu Ini" : p === "year" ? "Tahun Ini" : p === "month" ? "Bulan Ini" : "Kustom";
+              return (
+                <button
+                  key={p}
+                  onClick={() => setPeriod(p)}
+                  className={`px-4 py-1.5 rounded-full text-xs font-bold border-none cursor-pointer whitespace-nowrap transition-all ${
+                    active
+                      ? "bg-brand-surface-solid text-brand-text shadow-sm"
+                      : "bg-transparent text-brand-text-dim hover:text-brand-text"
+                  }`}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+          
+          {period === "custom" && (
+            <div className="flex gap-2 items-center text-xs w-full md:w-auto mt-2 md:mt-0">
+              <input
+                type="date"
+                className="bg-brand-surface-2 border border-brand-hairline rounded-lg px-3 py-1.5 text-brand-text font-mono font-medium outline-none focus:border-brand-accent transition-colors"
+                value={searchParams.get("from") || ""}
+                onChange={(e) => {
+                  const params = new URLSearchParams(searchParams);
+                  params.set("from", e.target.value);
+                  setSearchParams(params, { preventScrollReset: true });
+                }}
+              />
+              <span className="text-brand-text-mute font-bold">-</span>
+              <input
+                type="date"
+                className="bg-brand-surface-2 border border-brand-hairline rounded-lg px-3 py-1.5 text-brand-text font-mono font-medium outline-none focus:border-brand-accent transition-colors"
+                value={searchParams.get("to") || ""}
+                onChange={(e) => {
+                  const params = new URLSearchParams(searchParams);
+                  params.set("to", e.target.value);
+                  setSearchParams(params, { preventScrollReset: true });
+                }}
+              />
+            </div>
+          )}
         </div>
 
         {/* Category Multi-Select Filter Chips */}
