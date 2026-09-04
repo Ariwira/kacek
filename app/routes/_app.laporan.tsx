@@ -185,32 +185,34 @@ export default function LaporanPage() {
         </div>
 
         {/* Period Switcher */}
-        <div className="flex gap-4 items-center flex-wrap self-start mb-6 w-full max-w-full">
-          <div className="flex gap-1 p-0.75 rounded-full bg-brand-surface-2 border border-brand-hairline w-fit">
-            {(["week", "month", "year", "custom"] as const).map((p) => {
-              const active = period === p;
-              const label = p === "week" ? "Minggu Ini" : p === "year" ? "Tahun Ini" : p === "month" ? "Bulan Ini" : "Kustom";
-              return (
-                <button
-                  key={p}
-                  onClick={() => setPeriod(p)}
-                  className={`px-4 py-1.5 rounded-full text-xs font-bold border-none cursor-pointer whitespace-nowrap transition-all ${
-                    active
-                      ? "bg-brand-surface-solid text-brand-text shadow-sm"
-                      : "bg-transparent text-brand-text-dim hover:text-brand-text"
-                  }`}
-                >
-                  {label}
-                </button>
-              );
-            })}
+        <div className="flex flex-col xl:flex-row gap-3 xl:gap-4 items-start xl:items-center mb-6 w-full max-w-full">
+          <div className="w-full max-w-full overflow-x-auto scrollbar-none pb-1 -mb-1">
+            <div className="flex gap-1 p-0.75 rounded-full bg-brand-surface-2 border border-brand-hairline w-max">
+              {(["week", "month", "year", "custom"] as const).map((p) => {
+                const active = period === p;
+                const label = p === "week" ? "Minggu Ini" : p === "year" ? "Tahun Ini" : p === "month" ? "Bulan Ini" : "Kustom";
+                return (
+                  <button
+                    key={p}
+                    onClick={() => setPeriod(p)}
+                    className={`px-4 py-1.5 rounded-full text-xs font-bold border-none cursor-pointer whitespace-nowrap transition-all ${
+                      active
+                        ? "bg-brand-surface-solid text-brand-text shadow-sm"
+                        : "bg-transparent text-brand-text-dim hover:text-brand-text"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
           
           {period === "custom" && (
-            <div className="flex gap-2 items-center text-xs w-full md:w-auto mt-2 md:mt-0">
+            <div className="flex gap-2 items-center text-xs w-full xl:w-auto">
               <input
                 type="date"
-                className="bg-brand-surface-2 border border-brand-hairline rounded-lg px-3 py-1.5 text-brand-text font-mono font-medium outline-none focus:border-brand-accent transition-colors"
+                className="bg-brand-surface-2 border border-brand-hairline rounded-lg px-3 py-1.5 text-brand-text font-mono font-medium outline-none focus:border-brand-accent transition-colors flex-1 min-w-0"
                 value={searchParams.get("from") || ""}
                 onChange={(e) => {
                   const params = new URLSearchParams(searchParams);
@@ -218,10 +220,10 @@ export default function LaporanPage() {
                   setSearchParams(params, { preventScrollReset: true });
                 }}
               />
-              <span className="text-brand-text-mute font-bold">-</span>
+              <span className="text-brand-text-mute font-bold shrink-0">-</span>
               <input
                 type="date"
-                className="bg-brand-surface-2 border border-brand-hairline rounded-lg px-3 py-1.5 text-brand-text font-mono font-medium outline-none focus:border-brand-accent transition-colors"
+                className="bg-brand-surface-2 border border-brand-hairline rounded-lg px-3 py-1.5 text-brand-text font-mono font-medium outline-none focus:border-brand-accent transition-colors flex-1 min-w-0"
                 value={searchParams.get("to") || ""}
                 onChange={(e) => {
                   const params = new URLSearchParams(searchParams);
